@@ -1,0 +1,21 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+html,
+body {
+  height: 100%;
+}
+
+body {
+  @apply bg-background text-slate-900;
+}
+
+a {
+  @apply text-primary underline-offset-4 hover:underline;
+}
+
+.card {
+  @apply bg-white shadow-card rounded-xl;
+}
+
