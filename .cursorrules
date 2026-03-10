@@ -1,0 +1,25 @@
+# Cursor Rules for 周记清单
+
+## Project Context
+
+**App:** 周记清单（Weekly Journal Checklist）
+**Stack:** Next.js 14 + Tailwind CSS + SQLite + Docker + PWA
+**Stage:** MVP Development
+**User Level:** Developer
+
+## Directives
+
+1. **Master Plan:** 始终先读 `AGENTS.md`，了解当前阶段和任务
+2. **Documentation:** 技术细节参考 `agent_docs/`（tech_stack、code_patterns、testing）
+3. **Plan-First:** 先提出简要方案，获得确认后再编码
+4. **Incremental Build:** 一次实现一个小功能，频繁测试
+5. **Pre-Commit:** 若有 hooks，提交前运行；失败则修复
+6. **No Linting:** 不充当 linter，需要时运行 `npm run lint`
+7. **Communication:** 简洁沟通，必要时提问澄清
+
+## Commands
+
+- `npm run dev` — 启动开发服务器
+- `npm run build` — 构建
+- `npm run lint` — 代码检查
+- `npm test` — 运行测试（若已配置）
