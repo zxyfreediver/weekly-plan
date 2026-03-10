@@ -10,12 +10,13 @@ const updateTaskSchema = z.object({
 
 export async function PUT(
   request: Request,
-  { params }: { params: { id: string } },
+  { params }: { params: Promise<{ id: string }> },
 ) {
+  const { id } = await params;
   try {
     const json = await request.json();
     const body = updateTaskSchema.parse(json);
-    const task = updateTask(params.id, body);
+    const task = updateTask(id, body);
     if (!task) {
       return NextResponse.json({ error: "Not found" }, { status: 404 });
     }
@@ -34,10 +35,11 @@ export async function PUT(
 
 export async function DELETE(
   _request: Request,
-  { params }: { params: { id: string } },
+  { params }: { params: Promise<{ id: string }> },
 ) {
+  const { id } = await params;
   try {
-    deleteTask(params.id);
+    deleteTask(id);
     return NextResponse.json({ ok: true });
   } catch (error) {
     console.error(error);

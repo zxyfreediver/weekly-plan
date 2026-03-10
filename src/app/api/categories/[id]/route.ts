@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { getCategorySubCategories } from "@/lib/services/category";
 import { getDb } from "@/lib/db";
+import { getCurrentUser } from "@/lib/auth";
 
 const updateCategorySchema = z.object({
   name: z.string().min(1).max(100),
@@ -9,9 +10,14 @@ const updateCategorySchema = z.object({
 
 export async function GET(
   _request: Request,
-  { params }: { params: { id: string } },
+  { params }: { params: Promise<{ id: string }> },
 ) {
-  const data = getCategorySubCategories(params.id);
+  const { id } = await params;
+  const userId = await getCurrentUser();
+  if (!userId) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+  const data = getCategorySubCategories(id, userId);
   if (!data) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
@@ -20,8 +26,13 @@ export async function GET(
 
 export async function PUT(
   request: Request,
-  { params }: { params: { id: string } },
+  { params }: { params: Promise<{ id: string }> },
 ) {
+  const { id } = await params;
+  const userId = await getCurrentUser();
+  if (!userId) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
   try {
     const json = await request.json();
     const body = updateCategorySchema.parse(json);
@@ -31,12 +42,12 @@ export async function PUT(
       `
       UPDATE categories
       SET name = ?, updated_at = ?
-      WHERE id = ?
+      WHERE id = ? AND user_id = ?
     `,
     );
-    stmt.run(body.name, new Date().toISOString(), params.id);
+    stmt.run(body.name, new Date().toISOString(), id, userId);
 
-    return NextResponse.json({ id: params.id, name: body.name });
+    return NextResponse.json({ id, name: body.name });
   } catch (error) {
     console.error(error);
     return NextResponse.json(
@@ -51,12 +62,17 @@ export async function PUT(
 
 export async function DELETE(
   _request: Request,
-  { params }: { params: { id: string } },
+  { params }: { params: Promise<{ id: string }> },
 ) {
+  const { id } = await params;
+  const userId = await getCurrentUser();
+  if (!userId) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
   try {
     const db = getDb();
-    const stmt = db.prepare("DELETE FROM categories WHERE id = ?");
-    stmt.run(params.id);
+    const stmt = db.prepare("DELETE FROM categories WHERE id = ? AND user_id = ?");
+    stmt.run(id, userId);
     return NextResponse.json({ ok: true });
   } catch (error) {
     console.error(error);

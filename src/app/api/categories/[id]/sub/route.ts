@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { getCategorySubCategories } from "@/lib/services/category";
 import { getDb } from "@/lib/db";
+import { getCurrentUser } from "@/lib/auth";
 
 const createSubCategorySchema = z.object({
   name: z.string().min(1).max(100),
@@ -9,9 +10,14 @@ const createSubCategorySchema = z.object({
 
 export async function GET(
   _request: Request,
-  { params }: { params: { id: string } },
+  { params }: { params: Promise<{ id: string }> },
 ) {
-  const data = getCategorySubCategories(params.id);
+  const { id } = await params;
+  const userId = await getCurrentUser();
+  if (!userId) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+  const data = getCategorySubCategories(id, userId);
   if (!data) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
@@ -20,8 +26,17 @@ export async function GET(
 
 export async function POST(
   request: Request,
-  { params }: { params: { id: string } },
+  { params }: { params: Promise<{ id: string }> },
 ) {
+  const { id: categoryId } = await params;
+  const userId = await getCurrentUser();
+  if (!userId) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+  const data = getCategorySubCategories(categoryId, userId);
+  if (!data) {
+    return NextResponse.json({ error: "Not found" }, { status: 404 });
+  }
   try {
     const json = await request.json();
     const body = createSubCategorySchema.parse(json);
@@ -34,7 +49,7 @@ export async function POST(
       .prepare(
         "SELECT COALESCE(MAX(sort_order), 0) as maxOrder FROM sub_categories WHERE category_id = ?",
       )
-      .get(params.id) as { maxOrder: number };
+      .get(categoryId) as { maxOrder: number };
 
     const stmt = db.prepare(
       `
@@ -50,7 +65,7 @@ export async function POST(
     `,
     );
 
-    stmt.run(id, params.id, body.name, sortRow.maxOrder + 1, now, now);
+    stmt.run(id, categoryId, body.name, sortRow.maxOrder + 1, now, now);
 
     return NextResponse.json({ id, name: body.name });
   } catch (error) {

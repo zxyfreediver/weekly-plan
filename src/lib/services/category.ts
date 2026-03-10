@@ -1,7 +1,5 @@
 import { getDb } from "@/lib/db";
 
-const DEMO_USER_ID = "demo-user";
-
 export type CategoryWithStats = {
   id: string;
   name: string;
@@ -15,7 +13,7 @@ export type SubCategory = {
   pendingCount: number;
 };
 
-export function getCategoriesWithStats(): CategoryWithStats[] {
+export function getCategoriesWithStats(userId: string): CategoryWithStats[] {
   const db = getDb();
   const stmt = db.prepare<unknown, CategoryWithStats>(
     `
@@ -33,11 +31,12 @@ export function getCategoriesWithStats(): CategoryWithStats[] {
   `,
   );
 
-  return stmt.all(DEMO_USER_ID);
+  return stmt.all(userId);
 }
 
 export function getCategorySubCategories(
   categoryId: string,
+  userId: string,
 ): { id: string; name: string; subCategories: SubCategory[] } | null {
   const db = getDb();
 
@@ -52,7 +51,7 @@ export function getCategorySubCategories(
   `,
   );
 
-  const category = categoryStmt.get(categoryId, DEMO_USER_ID);
+  const category = categoryStmt.get(categoryId, userId);
 
   if (!category) {
     return null;

@@ -1,17 +1,45 @@
 "use client";
 
 import Link from "next/link";
-import { FormEvent, useState } from "react";
+import { use, useEffect, useState } from "react";
+import type { FormEvent } from "react";
 
 interface SummaryPageProps {
-  params: { categoryId: string; subCategoryId: string };
+  params: Promise<{ categoryId: string; subCategoryId: string }>;
 }
 
 export default function SummaryPage({ params }: SummaryPageProps) {
+  const { categoryId, subCategoryId } = use(params);
   const [startDate, setStartDate] = useState("2025-01-05");
   const [endDate, setEndDate] = useState("2025-01-11");
   const [isLoading, setIsLoading] = useState(false);
   const [summary, setSummary] = useState<string | null>(null);
+  const [categoryName, setCategoryName] = useState<string | null>(null);
+  const [subCategoryName, setSubCategoryName] = useState<string | null>(null);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    const load = async () => {
+      try {
+        const res = await fetch(`/api/categories/${categoryId}`, {
+          signal: controller.signal,
+        });
+        if (res.ok) {
+          const data = (await res.json()) as {
+            name: string;
+            subCategories: { id: string; name: string }[];
+          };
+          setCategoryName(data.name);
+          const sub = data.subCategories.find((s) => s.id === subCategoryId);
+          setSubCategoryName(sub?.name ?? null);
+        }
+      } catch (e) {
+        if ((e as Error).name !== "AbortError") console.error(e);
+      }
+    };
+    void load();
+    return () => controller.abort();
+  }, [categoryId, subCategoryId]);
 
   const handleSubmit = (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -39,23 +67,17 @@ export default function SummaryPage({ params }: SummaryPageProps) {
         </Link>
         <span className="mx-1.5">/</span>
         <Link
-          href={`/${params.categoryId}`}
+          href={`/${categoryId}`}
           className="hover:text-slate-700 hover:underline"
         >
-          {params.categoryId === "work"
-            ? "工作"
-            : params.categoryId === "life"
-              ? "生活"
-              : "家庭"}
+          {categoryName ?? categoryId}
         </Link>
         <span className="mx-1.5">/</span>
         <Link
-          href={`/${params.categoryId}/${params.subCategoryId}`}
+          href={`/${categoryId}/${subCategoryId}`}
           className="hover:text-slate-700 hover:underline"
         >
-          {params.subCategoryId === "2025"
-            ? "2025年工作"
-            : `${params.subCategoryId}年`}
+          {subCategoryName ?? subCategoryId}
         </Link>
         <span className="mx-1.5">/</span>
         <span className="text-slate-700">AI 总结</span>

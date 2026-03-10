@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { use, useEffect, useMemo, useState } from "react";
 
 type Task = {
   id: string;
@@ -12,7 +12,7 @@ type Task = {
 };
 
 interface WeeklyTasksPageProps {
-  params: { categoryId: string; subCategoryId: string };
+  params: Promise<{ categoryId: string; subCategoryId: string }>;
 }
 
 function getWeekInfo(offset: number): { label: string; start: string } {
@@ -34,13 +34,42 @@ function getWeekInfo(offset: number): { label: string; start: string } {
 }
 
 export default function WeeklyTasksPage({ params }: WeeklyTasksPageProps) {
+  const { categoryId, subCategoryId } = use(params);
   const [weekOffset, setWeekOffset] = useState(0);
   const [tasks, setTasks] = useState<Task[]>([]);
   const [loading, setLoading] = useState(true);
   const [newTask, setNewTask] = useState("");
   const [newPriority, setNewPriority] = useState(false);
+  const [categoryName, setCategoryName] = useState<string | null>(null);
+  const [subCategoryName, setSubCategoryName] = useState<string | null>(null);
 
   const weekInfo = useMemo(() => getWeekInfo(weekOffset), [weekOffset]);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    const load = async () => {
+      try {
+        const res = await fetch(`/api/categories/${categoryId}`, {
+          signal: controller.signal,
+        });
+        if (res.ok) {
+          const data = (await res.json()) as {
+            name: string;
+            subCategories: { id: string; name: string }[];
+          };
+          setCategoryName(data.name);
+          const sub = data.subCategories.find(
+            (s) => s.id === subCategoryId,
+          );
+          setSubCategoryName(sub?.name ?? null);
+        }
+      } catch (e) {
+        if ((e as Error).name !== "AbortError") console.error(e);
+      }
+    };
+    void load();
+    return () => controller.abort();
+  }, [categoryId, subCategoryId]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -48,7 +77,7 @@ export default function WeeklyTasksPage({ params }: WeeklyTasksPageProps) {
       setLoading(true);
       try {
         const url = `/api/tasks?subCategoryId=${encodeURIComponent(
-          `${params.categoryId}-${params.subCategoryId}`,
+          subCategoryId,
         )}&weekStart=${weekInfo.start}`;
         const res = await fetch(url, { signal: controller.signal });
         if (!res.ok) return;
@@ -64,7 +93,7 @@ export default function WeeklyTasksPage({ params }: WeeklyTasksPageProps) {
     };
     void load();
     return () => controller.abort();
-  }, [params.categoryId, params.subCategoryId, weekInfo.start]);
+  }, [categoryId, subCategoryId, weekInfo.start]);
 
   const sortedTasks = useMemo(() => {
     const copy = [...tasks];
@@ -124,7 +153,7 @@ export default function WeeklyTasksPage({ params }: WeeklyTasksPageProps) {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          subCategoryId: `${params.categoryId}-${params.subCategoryId}`,
+          subCategoryId: subCategoryId,
           content,
           isPriority: newPriority,
           weekStart: weekInfo.start,
@@ -148,27 +177,21 @@ export default function WeeklyTasksPage({ params }: WeeklyTasksPageProps) {
         </Link>
         <span className="mx-1.5">/</span>
         <Link
-          href={`/${params.categoryId}`}
+          href={`/${categoryId}`}
           className="hover:text-slate-700 hover:underline"
         >
-          {params.categoryId === "work"
-            ? "工作"
-            : params.categoryId === "life"
-              ? "生活"
-              : "家庭"}
+          {categoryName ?? categoryId}
         </Link>
         <span className="mx-1.5">/</span>
         <span className="text-slate-700">
-          {params.subCategoryId === "2025"
-            ? "2025年工作"
-            : `${params.subCategoryId}年`}
+          {subCategoryName ?? subCategoryId}
         </span>
       </nav>
 
       <div className="flex items-center justify-between gap-4">
         <h1 className="text-xl font-semibold text-slate-900">周记清单</h1>
         <Link
-          href={`/${params.categoryId}/${params.subCategoryId}/summary`}
+          href={`/${categoryId}/${subCategoryId}/summary`}
           className="inline-flex items-center rounded-lg bg-primary px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-blue-600"
         >
           ✨ AI 总结

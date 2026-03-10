@@ -2,19 +2,26 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { getCategoriesWithStats } from "@/lib/services/category";
 import { getDb } from "@/lib/db";
-
-const DEMO_USER_ID = "demo-user";
+import { getCurrentUser } from "@/lib/auth";
 
 const createCategorySchema = z.object({
   name: z.string().min(1).max(100),
 });
 
 export async function GET() {
-  const data = getCategoriesWithStats();
+  const userId = await getCurrentUser();
+  if (!userId) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+  const data = getCategoriesWithStats(userId);
   return NextResponse.json(data);
 }
 
 export async function POST(request: Request) {
+  const userId = await getCurrentUser();
+  if (!userId) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
   try {
     const json = await request.json();
     const body = createCategorySchema.parse(json);
@@ -31,12 +38,14 @@ export async function POST(request: Request) {
     );
 
     const sortOrderRow = db
-      .prepare("SELECT COALESCE(MAX(sort_order), 0) as maxOrder FROM categories")
-      .get() as { maxOrder: number };
+      .prepare(
+        "SELECT COALESCE(MAX(sort_order), 0) as maxOrder FROM categories WHERE user_id = ?",
+      )
+      .get(userId) as { maxOrder: number };
 
     stmt.run(
       id,
-      DEMO_USER_ID,
+      userId,
       body.name,
       sortOrderRow.maxOrder + 1,
       now,
