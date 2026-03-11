@@ -708,7 +708,6 @@ export default function WeeklyTasksPage({ params }: WeeklyTasksPageProps) {
                         )}
                       </div>
                     </div>
-                  </div>
                 )}
               </li>
             ))}
