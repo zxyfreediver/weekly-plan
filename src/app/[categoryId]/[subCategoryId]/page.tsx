@@ -40,27 +40,70 @@ interface WeeklyTasksPageProps {
   params: Promise<{ categoryId: string; subCategoryId: string }>;
 }
 
-function getWeekInfo(offset: number): { label: string; start: string } {
-  const today = new Date();
-  const monday = new Date(today);
-  const day = monday.getDay() || 7;
-  monday.setDate(monday.getDate() - day + 1 + offset * 7);
+function getMondayOfWeek(d: Date): Date {
+  const m = new Date(d);
+  const day = m.getDay() || 7;
+  m.setDate(m.getDate() - day + 1);
+  return m;
+}
+
+function toDateString(d: Date): string {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const dd = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${dd}`;
+}
+
+function getWeekInfoFromStart(start: string): {
+  label: string;
+  start: string;
+  weekNumber: number;
+  isoYear: number;
+} {
+  const monday = new Date(start + "T00:00:00");
   const sunday = new Date(monday);
   sunday.setDate(monday.getDate() + 6);
-
   const format = (d: Date) =>
     `${d.getFullYear()}年${d.getMonth() + 1}月${d.getDate()}日`;
-  const label = `${format(monday)} - ${format(sunday)}`;
-  const yyyy = monday.getFullYear();
-  const mm = String(monday.getMonth() + 1).padStart(2, "0");
-  const dd = String(monday.getDate()).padStart(2, "0");
-  const start = `${yyyy}-${mm}-${dd}`;
-  return { label, start };
+  const thursday = new Date(monday);
+  thursday.setDate(monday.getDate() + 3);
+  const isoYear = thursday.getFullYear();
+  const week1 = getMondayOfWeek(new Date(isoYear, 0, 4));
+  const diffMs = monday.getTime() - week1.getTime();
+  const weekNumber = Math.floor(diffMs / (7 * 24 * 60 * 60 * 1000)) + 1;
+  return {
+    label: `${format(monday)} - ${format(sunday)}`,
+    start,
+    weekNumber,
+    isoYear,
+  };
+}
+
+function getWeeksInYear(
+  year: number,
+): { label: string; start: string; weekNumber: number; weekIndex: number }[] {
+  const week1 = getMondayOfWeek(new Date(year, 0, 4));
+  const weeks: { label: string; start: string; weekNumber: number; weekIndex: number }[] = [];
+  const cur = new Date(week1);
+  let idx = 0;
+  while (cur.getFullYear() <= year) {
+    idx++;
+    const info = getWeekInfoFromStart(toDateString(cur));
+    weeks.push({ ...info, weekIndex: idx });
+    cur.setDate(cur.getDate() + 7);
+  }
+  return weeks;
+}
+
+function getInitialWeekStart(): string {
+  const monday = getMondayOfWeek(new Date());
+  return toDateString(monday);
 }
 
 export default function WeeklyTasksPage({ params }: WeeklyTasksPageProps) {
   const { categoryId, subCategoryId } = use(params);
-  const [weekOffset, setWeekOffset] = useState(0);
+  const [selectedWeekStart, setSelectedWeekStart] = useState(getInitialWeekStart);
+  const [weekPickerOpen, setWeekPickerOpen] = useState(false);
   const [tasks, setTasks] = useState<Task[]>([]);
   const [loading, setLoading] = useState(true);
   const [newTask, setNewTask] = useState("");
@@ -124,7 +167,26 @@ export default function WeeklyTasksPage({ params }: WeeklyTasksPageProps) {
     return `${y}年${m}月${d}日`;
   };
 
-  const weekInfo = useMemo(() => getWeekInfo(weekOffset), [weekOffset]);
+  const weekInfo = useMemo(
+    () => getWeekInfoFromStart(selectedWeekStart),
+    [selectedWeekStart],
+  );
+  const selectedYear = useMemo(
+    () => new Date(selectedWeekStart + "T00:00:00").getFullYear(),
+    [selectedWeekStart],
+  );
+  const weeksInYear = useMemo(() => getWeeksInYear(selectedYear), [selectedYear]);
+
+  const goPrevWeek = () => {
+    const d = new Date(selectedWeekStart + "T00:00:00");
+    d.setDate(d.getDate() - 7);
+    setSelectedWeekStart(toDateString(d));
+  };
+  const goNextWeek = () => {
+    const d = new Date(selectedWeekStart + "T00:00:00");
+    d.setDate(d.getDate() + 7);
+    setSelectedWeekStart(toDateString(d));
+  };
 
   useEffect(() => {
     const controller = new AbortController();
@@ -936,19 +998,75 @@ export default function WeeklyTasksPage({ params }: WeeklyTasksPageProps) {
         </Link>
       </div>
 
-      <div className="flex items-center justify-between rounded-lg border border-slate-200 bg-white px-4 py-3 text-sm">
-        <div className="flex items-center gap-3">
+      <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-slate-200 bg-white px-4 py-3 text-sm">
+        <div className="flex flex-wrap items-center gap-3">
+          <select
+            value={selectedYear}
+            aria-label="选择年份"
+            onChange={(e) => {
+              const y = Number(e.target.value);
+              const weeks = getWeeksInYear(y);
+              const inYear = weeks.find((w) => w.start === selectedWeekStart);
+              setSelectedWeekStart(inYear ? inYear.start : weeks[0]?.start ?? selectedWeekStart);
+            }}
+            className="rounded-lg border border-slate-200 bg-white px-2 py-1 text-xs text-slate-700"
+          >
+            {Array.from({ length: 5 }, (_, i) => new Date().getFullYear() - 2 + i).map(
+              (y) => (
+                <option key={y} value={y}>
+                  {y}年
+                </option>
+              ),
+            )}
+          </select>
           <button
             type="button"
-            onClick={() => setWeekOffset((v) => v - 1)}
+            onClick={goPrevWeek}
             className="btn-ghost rounded-lg border border-slate-200 px-2 py-1 text-xs text-slate-600"
           >
             上周
           </button>
-          <div className="font-medium text-slate-800">{weekInfo.label}</div>
+          <div className="relative">
+            <button
+              type="button"
+              onClick={() => setWeekPickerOpen((v) => !v)}
+              className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-medium text-slate-800 hover:bg-slate-50"
+              title="选择周"
+            >
+              {weekInfo.label} ▾
+            </button>
+            {weekPickerOpen && (
+              <>
+                <div
+                  className="fixed inset-0 z-40"
+                  onClick={() => setWeekPickerOpen(false)}
+                  aria-hidden
+                />
+                <div className="absolute left-0 top-full z-50 mt-1 max-h-56 overflow-y-auto rounded-lg border border-slate-200 bg-white py-1 shadow-lg">
+                  {weeksInYear.map((w) => (
+                    <button
+                      key={w.start}
+                      type="button"
+                      onClick={() => {
+                        setSelectedWeekStart(w.start);
+                        setWeekPickerOpen(false);
+                      }}
+                      className={`block w-full px-3 py-2 text-left text-xs hover:bg-slate-50 ${
+                        w.start === selectedWeekStart
+                          ? "bg-primary/10 text-primary font-medium"
+                          : "text-slate-700"
+                      }`}
+                    >
+                      第{w.weekIndex}周 {w.label}
+                    </button>
+                  ))}
+                </div>
+              </>
+            )}
+          </div>
           <button
             type="button"
-            onClick={() => setWeekOffset((v) => v + 1)}
+            onClick={goNextWeek}
             className="btn-ghost rounded-lg border border-slate-200 px-2 py-1 text-xs text-slate-600"
           >
             下周
