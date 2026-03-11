@@ -80,3 +80,25 @@ export function getCategorySubCategories(
   };
 }
 
+export function updateSubCategory(
+  subCategoryId: string,
+  userId: string,
+  name: string,
+): boolean {
+  const db = getDb();
+  const row = db
+    .prepare(
+      `
+    SELECT sc.id FROM sub_categories sc
+    JOIN categories c ON c.id = sc.category_id
+    WHERE sc.id = ? AND c.user_id = ?
+  `,
+    )
+    .get(subCategoryId, userId) as { id: string } | undefined;
+  if (!row) return false;
+  db.prepare(
+    "UPDATE sub_categories SET name = ?, updated_at = ? WHERE id = ?",
+  ).run(name, new Date().toISOString(), subCategoryId);
+  return true;
+}
+

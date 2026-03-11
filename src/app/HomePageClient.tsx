@@ -18,27 +18,60 @@ export function HomePageClient({
 }) {
   const router = useRouter();
   const [modalOpen, setModalOpen] = useState(false);
+  const [editTarget, setEditTarget] = useState<CategoryWithStats | null>(null);
   const [name, setName] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const openCreate = () => {
+    setEditTarget(null);
+    setName("");
+    setError(null);
+    setModalOpen(true);
+  };
+
+  const openEdit = (cat: CategoryWithStats, e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setEditTarget(cat);
+    setName(cat.name);
+    setError(null);
+    setModalOpen(true);
+  };
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
     setError(null);
     setSubmitting(true);
     try {
-      const res = await fetch("/api/categories", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name: name.trim() }),
-      });
-      if (!res.ok) {
-        const data = (await res.json().catch(() => null)) as { error?: string };
-        setError(data?.error ?? "创建失败");
-        setSubmitting(false);
-        return;
+      const trimmed = name.trim();
+      if (editTarget) {
+        const res = await fetch(`/api/categories/${editTarget.id}`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ name: trimmed }),
+        });
+        if (!res.ok) {
+          const data = (await res.json().catch(() => null)) as { error?: string };
+          setError(data?.error ?? "更新失败");
+          setSubmitting(false);
+          return;
+        }
+      } else {
+        const res = await fetch("/api/categories", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ name: trimmed }),
+        });
+        if (!res.ok) {
+          const data = (await res.json().catch(() => null)) as { error?: string };
+          setError(data?.error ?? "创建失败");
+          setSubmitting(false);
+          return;
+        }
       }
       setName("");
+      setEditTarget(null);
       setModalOpen(false);
       router.refresh();
     } catch (err) {
@@ -59,7 +92,7 @@ export function HomePageClient({
         </div>
         <button
           type="button"
-          onClick={() => setModalOpen(true)}
+          onClick={openCreate}
           className="inline-flex items-center rounded-lg bg-primary px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-blue-600"
         >
           + 新建分类
@@ -81,7 +114,7 @@ export function HomePageClient({
           </div>
           <button
             type="button"
-            onClick={() => setModalOpen(true)}
+            onClick={openCreate}
             className="rounded-lg bg-primary px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-blue-600"
           >
             新建分类
@@ -98,12 +131,24 @@ export function HomePageClient({
               <Link
                 key={category.id}
                 href={`/${category.id}`}
-                className="card flex flex-col gap-3 p-4 transition hover:-translate-y-0.5 hover:shadow-md"
+                className="card flex flex-col gap-3 p-4 transition hover:-translate-y-0.5 hover:shadow-md block"
               >
-                <div className="flex items-center justify-between">
+                <div className="flex items-start justify-between">
                   <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10 text-xl">
                     📁
                   </div>
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      openEdit(category, e);
+                    }}
+                    className="rounded p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-600"
+                    title="编辑"
+                  >
+                    ✏️
+                  </button>
                 </div>
                 <div className="space-y-1">
                   <div className="text-sm font-semibold text-slate-900">
@@ -139,7 +184,9 @@ export function HomePageClient({
             className="card w-full max-w-md p-6"
             onClick={(e) => e.stopPropagation()}
           >
-            <h2 className="text-lg font-semibold text-slate-900">新建分类</h2>
+            <h2 className="text-lg font-semibold text-slate-900">
+              {editTarget ? "编辑分类" : "新建分类"}
+            </h2>
             <p className="mt-1 text-xs text-slate-500">
               输入分类名称，如：工作、生活、家庭
             </p>
@@ -170,7 +217,11 @@ export function HomePageClient({
                   disabled={submitting || !name.trim()}
                   className="rounded-lg bg-primary px-4 py-2 text-sm font-medium text-white hover:bg-blue-600 disabled:opacity-70"
                 >
-                  {submitting ? "创建中..." : "确定"}
+                  {submitting
+                    ? editTarget
+                      ? "保存中..."
+                      : "创建中..."
+                    : "确定"}
                 </button>
               </div>
             </form>
