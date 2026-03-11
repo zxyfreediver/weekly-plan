@@ -3,6 +3,17 @@
 import Link from "next/link";
 import { use, useEffect, useMemo, useState } from "react";
 
+type Progress = {
+  id: string;
+  subTaskId: string;
+  content: string;
+  assignee: string;
+  isPriority: boolean;
+  isCompleted: boolean;
+  dueDate: string | null;
+  sortOrder: number;
+};
+
 type SubTask = {
   id: string;
   taskId: string;
@@ -13,6 +24,7 @@ type SubTask = {
   isPriority: boolean;
   sortOrder: number;
   dueDate: string | null;
+  progress: Progress[];
 };
 
 type Task = {
@@ -73,6 +85,22 @@ export default function WeeklyTasksPage({ params }: WeeklyTasksPageProps) {
   const [editSubTaskPriority, setEditSubTaskPriority] = useState(false);
   const [editSubTaskDueDate, setEditSubTaskDueDate] = useState("");
   const [deleteSubTaskConfirm, setDeleteSubTaskConfirm] = useState<string | null>(null);
+  const [expandedSubTaskId, setExpandedSubTaskId] = useState<string | null>(null);
+  const [newProgressSubTaskId, setNewProgressSubTaskId] = useState<string | null>(null);
+  const [newProgressContent, setNewProgressContent] = useState("");
+  const [newProgressAssignee, setNewProgressAssignee] = useState("");
+  const [newProgressPriority, setNewProgressPriority] = useState(false);
+  const [newProgressDueDate, setNewProgressDueDate] = useState("");
+  const [editProgress, setEditProgress] = useState<Progress | null>(null);
+  const [editProgressContent, setEditProgressContent] = useState("");
+  const [editProgressAssignee, setEditProgressAssignee] = useState("");
+  const [editProgressPriority, setEditProgressPriority] = useState(false);
+  const [editProgressDueDate, setEditProgressDueDate] = useState("");
+  const [deleteProgressConfirm, setDeleteProgressConfirm] = useState<{
+    id: string;
+    taskId: string;
+    subTaskId: string;
+  } | null>(null);
 
   const getDueDateStatus = (dueDate: string | null) => {
     if (!dueDate) return null;
@@ -286,11 +314,17 @@ export default function WeeklyTasksPage({ params }: WeeklyTasksPageProps) {
         }),
       });
       if (!res.ok) return;
-      const created: SubTask = await res.json();
+      const created = (await res.json()) as SubTask;
       setTasks((prev) =>
         prev.map((t) =>
           t.id === taskId
-            ? { ...t, subTasks: [...t.subTasks, created] }
+            ? {
+                ...t,
+                subTasks: [
+                  ...t.subTasks,
+                  { ...created, progress: created.progress ?? [] },
+                ],
+              }
             : t,
         ),
       );
@@ -377,6 +411,7 @@ export default function WeeklyTasksPage({ params }: WeeklyTasksPageProps) {
           description: editSubTaskDesc,
           assignee: editSubTaskAssignee.trim(),
           isPriority: editSubTaskPriority,
+          dueDate: editSubTaskDueDate.trim() || null,
         }),
       });
       if (!res.ok) return;
@@ -424,6 +459,245 @@ export default function WeeklyTasksPage({ params }: WeeklyTasksPageProps) {
         ),
       );
       setDeleteSubTaskConfirm(null);
+      if (expandedSubTaskId === subTaskId) setExpandedSubTaskId(null);
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const isEffectivePriority = (st: SubTask) =>
+    st.isPriority || (st.progress?.some((p) => p.isPriority) ?? false);
+
+  const toggleSubTaskExpand = (st: SubTask) => {
+    if (expandedSubTaskId === st.id) {
+      setExpandedSubTaskId(null);
+      setNewProgressSubTaskId(null);
+      setEditProgress(null);
+      return;
+    }
+    setExpandedSubTaskId(st.id);
+    setNewProgressContent("");
+    setNewProgressAssignee("");
+    setNewProgressPriority(false);
+    setNewProgressDueDate("");
+  };
+
+  const handleAddProgress = async (taskId: string, subTaskId: string) => {
+    const content = newProgressContent.trim();
+    if (!content) return;
+    try {
+      const res = await fetch(`/api/sub-tasks/${subTaskId}/progress`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          content,
+          assignee: newProgressAssignee.trim(),
+          isPriority: newProgressPriority,
+          dueDate: newProgressDueDate.trim() || null,
+        }),
+      });
+      if (!res.ok) return;
+      const created: Progress = await res.json();
+      setTasks((prev) =>
+        prev.map((t) =>
+          t.id === taskId
+            ? {
+                ...t,
+                subTasks: t.subTasks.map((s) =>
+                  s.id === subTaskId
+                    ? {
+                        ...s,
+                        progress: [...(s.progress ?? []), created],
+                      }
+                    : s,
+                ),
+              }
+            : t,
+        ),
+      );
+      setNewProgressContent("");
+      setNewProgressAssignee("");
+      setNewProgressPriority(false);
+      setNewProgressDueDate("");
+      setNewProgressSubTaskId(null);
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const handleToggleProgressPriority = async (
+    taskId: string,
+    subTaskId: string,
+    p: Progress,
+  ) => {
+    const nextPriority = !p.isPriority;
+    setTasks((prev) =>
+      prev.map((t) =>
+        t.id === taskId
+          ? {
+              ...t,
+              subTasks: t.subTasks.map((s) =>
+                s.id === subTaskId
+                  ? {
+                      ...s,
+                      progress: (s.progress ?? []).map((pr) =>
+                        pr.id === p.id ? { ...pr, isPriority: nextPriority } : pr,
+                      ),
+                    }
+                  : s,
+              ),
+            }
+          : t,
+      ),
+    );
+    try {
+      await fetch(`/api/progress/${p.id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ isPriority: nextPriority }),
+      });
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const openEditProgress = (p: Progress) => {
+    setEditProgress(p);
+    setEditProgressContent(p.content);
+    setEditProgressAssignee(p.assignee);
+    setEditProgressPriority(p.isPriority);
+    setEditProgressDueDate(p.dueDate ?? "");
+  };
+
+  const handleEditProgress = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editProgress) return;
+    const trimmed = editProgressContent.trim();
+    if (!trimmed) return;
+    try {
+      const res = await fetch(`/api/progress/${editProgress.id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          content: trimmed,
+          assignee: editProgressAssignee.trim(),
+          isPriority: editProgressPriority,
+          dueDate: editProgressDueDate.trim() || null,
+        }),
+      });
+      if (!res.ok) return;
+      const task = tasks.find((t) =>
+        t.subTasks.some((s) => s.progress?.some((p) => p.id === editProgress.id)),
+      );
+      if (task) {
+        const subTask = task.subTasks.find((s) =>
+          s.progress?.some((p) => p.id === editProgress.id),
+        );
+        if (subTask) {
+          setTasks((prev) =>
+            prev.map((t) =>
+              t.id === task.id
+                ? {
+                    ...t,
+                    subTasks: t.subTasks.map((s) =>
+                      s.id === subTask.id
+                        ? {
+                            ...s,
+                            progress: (s.progress ?? []).map((pr) =>
+                              pr.id === editProgress.id
+                                ? {
+                                    ...pr,
+                                    content: trimmed,
+                                    assignee: editProgressAssignee.trim(),
+                                    isPriority: editProgressPriority,
+                                    dueDate: editProgressDueDate.trim() || null,
+                                  }
+                                : pr,
+                            ),
+                          }
+                        : s,
+                    ),
+                  }
+                : t,
+            ),
+          );
+        }
+      }
+      setEditProgress(null);
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const handleDeleteProgress = async () => {
+    if (!deleteProgressConfirm) return;
+    const { id: progressId, taskId, subTaskId } = deleteProgressConfirm;
+    try {
+      const res = await fetch(`/api/progress/${progressId}`, {
+        method: "DELETE",
+      });
+      if (!res.ok) return;
+      setTasks((prev) =>
+        prev.map((t) =>
+          t.id === taskId
+            ? {
+                ...t,
+                subTasks: t.subTasks.map((s) =>
+                  s.id === subTaskId
+                    ? {
+                        ...s,
+                        progress: (s.progress ?? []).filter((p) => p.id !== progressId),
+                      }
+                    : s,
+                ),
+              }
+            : t,
+        ),
+      );
+      setDeleteProgressConfirm(null);
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const sortedProgress = (progress: Progress[]) =>
+    [...(progress ?? [])].sort((a, b) => {
+      if (a.isCompleted !== b.isCompleted) return a.isCompleted ? 1 : -1;
+      if (a.isPriority !== b.isPriority) return a.isPriority ? -1 : 1;
+      return 0;
+    });
+
+  const handleToggleProgressCompleted = async (
+    taskId: string,
+    subTaskId: string,
+    p: Progress,
+  ) => {
+    const nextCompleted = !p.isCompleted;
+    setTasks((prev) =>
+      prev.map((t) =>
+        t.id === taskId
+          ? {
+              ...t,
+              subTasks: t.subTasks.map((s) =>
+                s.id === subTaskId
+                  ? {
+                      ...s,
+                      progress: (s.progress ?? []).map((pr) =>
+                        pr.id === p.id ? { ...pr, isCompleted: nextCompleted } : pr,
+                      ),
+                    }
+                  : s,
+              ),
+            }
+          : t,
+      ),
+    );
+    try {
+      await fetch(`/api/progress/${p.id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ isCompleted: nextCompleted }),
+      });
     } catch (err) {
       console.error(err);
     }
@@ -633,9 +907,10 @@ export default function WeeklyTasksPage({ params }: WeeklyTasksPageProps) {
                         {sortedSubTasks(task.subTasks).map((st) => (
                           <li
                             key={st.id}
-                            className="flex items-center gap-2 rounded-lg border border-slate-100 bg-slate-50 px-2 py-1.5"
+                            className="overflow-hidden rounded-lg border border-slate-100 bg-slate-50"
                           >
-                            <button
+                            <div className="flex items-center gap-2 px-2 py-1.5">
+                              <button
                                 type="button"
                                 onClick={() =>
                                   handleToggleSubTaskCompleted(task.id, st)
@@ -644,7 +919,11 @@ export default function WeeklyTasksPage({ params }: WeeklyTasksPageProps) {
                               >
                                 {st.isCompleted ? "✓" : ""}
                               </button>
-                              <div className="min-w-0 flex-1">
+                              <button
+                                type="button"
+                                onClick={() => toggleSubTaskExpand(st)}
+                                className="min-w-0 flex-1 text-left"
+                              >
                                 <span
                                   className={`text-sm ${
                                     st.isCompleted
@@ -653,7 +932,7 @@ export default function WeeklyTasksPage({ params }: WeeklyTasksPageProps) {
                                   }`}
                                 >
                                   {st.content}
-                                  {st.isPriority ? (
+                                  {isEffectivePriority(st) ? (
                                     <span className="ml-1.5 shrink-0 rounded-full bg-amber-100 px-1.5 py-0.5 text-[10px] font-medium text-amber-700">
                                       高优先级
                                     </span>
@@ -694,14 +973,18 @@ export default function WeeklyTasksPage({ params }: WeeklyTasksPageProps) {
                                     )}
                                   </div>
                                 )}
-                              </div>
+                              </button>
                               <div className="flex shrink-0 gap-1">
                                 <button
                                   type="button"
                                   onClick={() =>
                                     handleToggleSubTaskPriority(task.id, st)
                                   }
-                                  className="rounded px-1 py-0.5 text-xs hover:bg-slate-100"
+                                  className={`rounded px-1 py-0.5 text-xs hover:bg-slate-100 ${
+                                    isEffectivePriority(st)
+                                      ? "text-amber-600"
+                                      : ""
+                                  }`}
                                   title="优先级"
                                 >
                                   ⭐
@@ -725,7 +1008,201 @@ export default function WeeklyTasksPage({ params }: WeeklyTasksPageProps) {
                                   🗑️
                                 </button>
                               </div>
-                            </li>
+                            </div>
+                            {expandedSubTaskId === st.id && (
+                              <div className="animate-slide-down border-t border-slate-100 bg-white px-2 py-2">
+                                <div className="mb-1.5 text-xs font-medium text-slate-500">
+                                  进度
+                                </div>
+                                <ul className="space-y-1">
+                                  {sortedProgress(st.progress ?? []).map((p) => (
+                                    <li
+                                      key={p.id}
+                                      className="flex items-center gap-2 rounded border border-slate-100 bg-slate-50/80 px-2 py-1.5"
+                                    >
+                                      <button
+                                        type="button"
+                                        onClick={() =>
+                                          handleToggleProgressCompleted(
+                                            task.id,
+                                            st.id,
+                                            p,
+                                          )
+                                        }
+                                        className="flex h-3 w-3 shrink-0 items-center justify-center rounded border border-slate-300 bg-white text-[8px] text-primary"
+                                      >
+                                        {p.isCompleted ? "✓" : ""}
+                                      </button>
+                                      <div className="min-w-0 flex-1">
+                                        <span
+                                          className={`text-xs ${
+                                            p.isCompleted
+                                              ? "line-through text-slate-400"
+                                              : "text-slate-700"
+                                          }`}
+                                        >
+                                          {p.content}
+                                          {p.isPriority && (
+                                            <span className="ml-1 rounded-full bg-amber-100 px-1 py-0.5 text-[10px] font-medium text-amber-700">
+                                              高优先级
+                                            </span>
+                                          )}
+                                          {!p.isCompleted &&
+                                            getDueDateStatus(p.dueDate) === "urgent" && (
+                                              <span className="ml-1 rounded-full bg-orange-100 px-1 py-0.5 text-[10px] font-medium text-orange-700">
+                                                临期
+                                              </span>
+                                            )}
+                                          {!p.isCompleted &&
+                                            getDueDateStatus(p.dueDate) === "overdue" && (
+                                              <span className="ml-1 rounded-full bg-red-100 px-1 py-0.5 text-[10px] font-medium text-red-700">
+                                                已逾期
+                                              </span>
+                                            )}
+                                        </span>
+                                        {(p.assignee || p.dueDate) && (
+                                          <div className="mt-0.5 flex flex-wrap gap-x-2 text-[10px] text-slate-500">
+                                            {p.assignee && (
+                                              <span>对接人: {p.assignee}</span>
+                                            )}
+                                            {p.dueDate && (
+                                              <span>
+                                                截止: {formatDueDate(p.dueDate)}
+                                              </span>
+                                            )}
+                                          </div>
+                                        )}
+                                      </div>
+                                      <div className="flex shrink-0 gap-0.5">
+                                        <button
+                                          type="button"
+                                          onClick={() =>
+                                            handleToggleProgressPriority(
+                                              task.id,
+                                              st.id,
+                                              p,
+                                            )
+                                          }
+                                          className={`rounded px-1 py-0.5 text-[10px] hover:bg-slate-100 ${
+                                            p.isPriority ? "text-amber-600" : ""
+                                          }`}
+                                          title="优先级"
+                                        >
+                                          ⭐
+                                        </button>
+                                        <button
+                                          type="button"
+                                          onClick={() => openEditProgress(p)}
+                                          className="rounded px-1 py-0.5 text-[10px] hover:bg-slate-100"
+                                          title="编辑"
+                                        >
+                                          ✏️
+                                        </button>
+                                        <button
+                                          type="button"
+                                          onClick={() =>
+                                            setDeleteProgressConfirm({
+                                              id: p.id,
+                                              taskId: task.id,
+                                              subTaskId: st.id,
+                                            })
+                                          }
+                                          className="rounded px-1 py-0.5 text-[10px] hover:bg-slate-100"
+                                          title="删除"
+                                        >
+                                          🗑️
+                                        </button>
+                                      </div>
+                                    </li>
+                                  ))}
+                                </ul>
+                                {newProgressSubTaskId === st.id ? (
+                                  <div className="mt-2 space-y-1.5 rounded border border-slate-200 bg-slate-50/80 p-2">
+                                    <input
+                                      type="text"
+                                      value={newProgressContent}
+                                      onChange={(e) =>
+                                        setNewProgressContent(e.target.value)
+                                      }
+                                      placeholder="进度内容"
+                                      className="input-base py-1.5 text-xs"
+                                    />
+                                    <input
+                                      type="text"
+                                      value={newProgressAssignee}
+                                      onChange={(e) =>
+                                        setNewProgressAssignee(e.target.value)
+                                      }
+                                      placeholder="对接人"
+                                      className="input-base py-1.5 text-xs"
+                                    />
+                                    <input
+                                      type="date"
+                                      value={newProgressDueDate}
+                                      onChange={(e) =>
+                                        setNewProgressDueDate(e.target.value)
+                                      }
+                                      className="input-base py-1.5 text-xs"
+                                    />
+                                    <div className="flex items-center justify-between">
+                                      <label className="flex items-center gap-1 text-xs text-slate-600">
+                                        <input
+                                          type="checkbox"
+                                          checked={newProgressPriority}
+                                          onChange={(e) =>
+                                            setNewProgressPriority(
+                                              e.target.checked,
+                                            )
+                                          }
+                                          className="h-3 w-3 rounded border-slate-300 text-primary"
+                                        />
+                                        高优先级
+                                      </label>
+                                      <div className="flex gap-1">
+                                        <button
+                                          type="button"
+                                          onClick={() => {
+                                            setNewProgressSubTaskId(null);
+                                            setNewProgressContent("");
+                                            setNewProgressAssignee("");
+                                            setNewProgressPriority(false);
+                                            setNewProgressDueDate("");
+                                          }}
+                                          className="rounded border border-slate-200 px-1.5 py-0.5 text-xs text-slate-600 hover:bg-slate-100"
+                                        >
+                                          取消
+                                        </button>
+                                        <button
+                                          type="button"
+                                          onClick={() =>
+                                            handleAddProgress(task.id, st.id)
+                                          }
+                                          disabled={!newProgressContent.trim()}
+                                          className="rounded bg-primary px-1.5 py-0.5 text-xs font-medium text-white hover:bg-blue-600 disabled:opacity-70"
+                                        >
+                                          添加
+                                        </button>
+                                      </div>
+                                    </div>
+                                  </div>
+                                ) : (
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setNewProgressSubTaskId(st.id);
+                                      setNewProgressContent("");
+                                      setNewProgressAssignee("");
+                                      setNewProgressPriority(false);
+                                      setNewProgressDueDate("");
+                                    }}
+                                    className="mt-2 rounded border border-dashed border-slate-200 px-2 py-1 text-[10px] text-slate-500 hover:border-slate-300 hover:bg-slate-50"
+                                  >
+                                    + 添加进度
+                                  </button>
+                                )}
+                              </div>
+                            )}
+                          </li>
                           ))}
                         </ul>
                         {newSubTaskId === task.id ? (
@@ -979,6 +1456,83 @@ export default function WeeklyTasksPage({ params }: WeeklyTasksPageProps) {
         </div>
       )}
 
+      {editProgress && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 animate-fade-in"
+          onClick={() => setEditProgress(null)}
+        >
+          <div
+            className="card w-full max-w-md p-6 animate-scale-in"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h2 className="text-lg font-semibold text-slate-900">编辑进度</h2>
+            <form onSubmit={handleEditProgress} className="mt-4 space-y-4">
+              <div>
+                <label className="mb-1 block text-xs font-medium text-slate-500">
+                  进度内容
+                </label>
+                <input
+                  type="text"
+                  value={editProgressContent}
+                  onChange={(e) => setEditProgressContent(e.target.value)}
+                  placeholder="进度内容"
+                  className="input-base"
+                  autoFocus
+                />
+              </div>
+              <div>
+                <label className="mb-1 block text-xs font-medium text-slate-500">
+                  对接人
+                </label>
+                <input
+                  type="text"
+                  value={editProgressAssignee}
+                  onChange={(e) => setEditProgressAssignee(e.target.value)}
+                  placeholder="对接人"
+                  className="input-base"
+                />
+              </div>
+              <div>
+                <label className="mb-1 block text-xs font-medium text-slate-500">
+                  截止日期（选填）
+                </label>
+                <input
+                  type="date"
+                  value={editProgressDueDate}
+                  onChange={(e) => setEditProgressDueDate(e.target.value)}
+                  className="input-base"
+                />
+              </div>
+              <label className="flex items-center gap-2 text-sm text-slate-600">
+                <input
+                  type="checkbox"
+                  checked={editProgressPriority}
+                  onChange={(e) => setEditProgressPriority(e.target.checked)}
+                  className="h-3.5 w-3.5 rounded border-slate-300 text-primary"
+                />
+                高优先级
+              </label>
+              <div className="flex justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={() => setEditProgress(null)}
+                  className="rounded-lg border border-slate-200 px-4 py-2 text-sm text-slate-600 hover:bg-slate-50"
+                >
+                  取消
+                </button>
+                <button
+                  type="submit"
+                  disabled={!editProgressContent.trim()}
+                  className="btn-primary"
+                >
+                  保存
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
       {deleteConfirm && (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 animate-fade-in"
@@ -1042,6 +1596,41 @@ export default function WeeklyTasksPage({ params }: WeeklyTasksPageProps) {
                   if (task)
                     handleDeleteSubTask(task.id, deleteSubTaskConfirm);
                   setDeleteSubTaskConfirm(null);
+                }}
+                className="rounded-lg bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700"
+              >
+                删除
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {deleteProgressConfirm && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 animate-fade-in"
+          onClick={() => setDeleteProgressConfirm(null)}
+        >
+          <div
+            className="card w-full max-w-md p-6 animate-scale-in"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h2 className="text-lg font-semibold text-slate-900">删除进度</h2>
+            <p className="mt-2 text-sm text-slate-600">
+              确定要删除该进度吗？
+            </p>
+            <div className="mt-4 flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setDeleteProgressConfirm(null)}
+                className="rounded-lg border border-slate-200 px-4 py-2 text-sm text-slate-600 hover:bg-slate-50"
+              >
+                取消
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  handleDeleteProgress();
                 }}
                 className="rounded-lg bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700"
               >

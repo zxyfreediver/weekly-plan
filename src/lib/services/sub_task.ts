@@ -1,4 +1,5 @@
 import { supabase } from "@/lib/supabase";
+import { getProgressBySubTaskId, type Progress } from "./progress";
 
 export type SubTask = {
   id: string;
@@ -10,6 +11,7 @@ export type SubTask = {
   isPriority: boolean;
   sortOrder: number;
   dueDate: string | null;
+  progress: Progress[];
 };
 
 export async function getSubTasksByTaskId(taskId: string): Promise<SubTask[]> {
@@ -22,7 +24,7 @@ export async function getSubTasksByTaskId(taskId: string): Promise<SubTask[]> {
     .order("is_priority", { ascending: false })
     .order("created_at");
 
-  return (data ?? []).map((r) => ({
+  const subTasks = (data ?? []).map((r) => ({
     id: r.id,
     taskId: r.task_id,
     content: r.content,
@@ -33,6 +35,13 @@ export async function getSubTasksByTaskId(taskId: string): Promise<SubTask[]> {
     sortOrder: r.sort_order ?? 0,
     dueDate: r.due_date ?? null,
   }));
+
+  const withProgress: SubTask[] = [];
+  for (const st of subTasks) {
+    const progress = await getProgressBySubTaskId(st.id);
+    withProgress.push({ ...st, progress });
+  }
+  return withProgress;
 }
 
 export async function createSubTask(input: {
@@ -81,6 +90,7 @@ export async function createSubTask(input: {
     isPriority: Boolean(input.isPriority),
     sortOrder,
     dueDate,
+    progress: [],
   };
 }
 
@@ -123,6 +133,7 @@ export async function updateSubTask(
 
   if (error) throw error;
 
+  const progress = await getProgressBySubTaskId(existing.id);
   return {
     id: existing.id,
     taskId: existing.task_id,
@@ -133,6 +144,7 @@ export async function updateSubTask(
     isPriority: nextPriority,
     sortOrder: existing.sort_order ?? 0,
     dueDate: nextDueDate,
+    progress,
   };
 }
 
