@@ -2,7 +2,7 @@
 
 > 个人周度任务管理工具，帮助职场人按周记录、分类、完成待办，并支持 AI 总结。Keep organized, stay productive.
 
-[![License: ISC](https://img.shields.io/badge/License-ISC-blue.svg)](LICENSE)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
 ## ✨ 为什么选择周记清单？
 
@@ -110,4 +110,4 @@ src/
 
 ## 📄 许可证
 
-ISC
+MIT
