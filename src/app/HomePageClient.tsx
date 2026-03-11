@@ -93,7 +93,7 @@ export function HomePageClient({
         <button
           type="button"
           onClick={openCreate}
-          className="inline-flex items-center rounded-lg bg-primary px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-blue-600"
+          className="btn-primary"
         >
           + 新建分类
         </button>
@@ -115,7 +115,7 @@ export function HomePageClient({
           <button
             type="button"
             onClick={openCreate}
-            className="rounded-lg bg-primary px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-blue-600"
+            className="btn-primary"
           >
             新建分类
           </button>
@@ -131,7 +131,7 @@ export function HomePageClient({
               <Link
                 key={category.id}
                 href={`/${category.id}`}
-                className="card flex flex-col gap-3 p-4 transition hover:-translate-y-0.5 hover:shadow-md block"
+                className="card card-hover flex flex-col gap-3 p-4 block"
               >
                 <div className="flex items-start justify-between">
                   <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10 text-xl">
@@ -177,11 +177,11 @@ export function HomePageClient({
 
       {modalOpen && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 animate-fade-in"
           onClick={() => !submitting && setModalOpen(false)}
         >
           <div
-            className="card w-full max-w-md p-6"
+            className="card w-full max-w-md p-6 animate-scale-in"
             onClick={(e) => e.stopPropagation()}
           >
             <h2 className="text-lg font-semibold text-slate-900">
@@ -201,7 +201,7 @@ export function HomePageClient({
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 placeholder="分类名称"
-                className="w-full rounded-lg border border-slate-200 px-3 py-2.5 text-sm outline-none focus:border-primary focus:ring-1 focus:ring-primary"
+                className="input-base"
                 autoFocus
               />
               <div className="flex justify-end gap-2">
@@ -215,13 +215,16 @@ export function HomePageClient({
                 <button
                   type="submit"
                   disabled={submitting || !name.trim()}
-                  className="rounded-lg bg-primary px-4 py-2 text-sm font-medium text-white hover:bg-blue-600 disabled:opacity-70"
+                  className="btn-primary"
                 >
-                  {submitting
-                    ? editTarget
-                      ? "保存中..."
-                      : "创建中..."
-                    : "确定"}
+                  {submitting ? (
+                    <span className="inline-flex items-center gap-2">
+                      <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-white border-t-transparent" />
+                      {editTarget ? "保存中..." : "创建中..."}
+                    </span>
+                  ) : (
+                    "确定"
+                  )}
                 </button>
               </div>
             </form>

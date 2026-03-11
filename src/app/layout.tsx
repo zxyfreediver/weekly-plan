@@ -36,7 +36,7 @@ export default function RootLayout({
           <div className="mx-auto flex h-14 w-full max-w-6xl items-center justify-between px-4">
             <Link
               href="/"
-              className="flex items-center gap-2 text-sm font-semibold text-slate-800 hover:opacity-80"
+              className="flex items-center gap-2 text-sm font-semibold text-slate-800 transition-opacity duration-200 hover:opacity-80"
             >
               <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary text-white text-lg">
                 📅
@@ -46,7 +46,9 @@ export default function RootLayout({
             <HeaderUser />
           </div>
         </header>
-        <main className="mx-auto w-full max-w-6xl flex-1 px-4 py-8">{children}</main>
+        <main className="mx-auto w-full max-w-6xl flex-1 px-4 py-8 transition-opacity duration-200">
+          {children}
+        </main>
         <footer className="mt-auto shrink-0 border-t border-slate-200 bg-white">
           <div className="mx-auto flex h-12 w-full max-w-6xl items-center justify-center px-4 text-xs text-slate-400">
             © {new Date().getFullYear()} 周记清单 · Keep organized, stay productive.

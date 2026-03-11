@@ -2,20 +2,117 @@
 @tailwind components;
 @tailwind utilities;
 
-html,
-body {
-  height: 100%;
+@layer base {
+  html {
+    scroll-behavior: smooth;
+  }
+  html,
+  body {
+    height: 100%;
+  }
+  body {
+    @apply bg-background text-slate-900 antialiased;
+  }
+  a {
+    @apply text-primary underline-offset-4 hover:underline transition-colors duration-200;
+  }
 }
 
-body {
-  @apply bg-background text-slate-900;
+@layer components {
+  .card {
+    @apply bg-white shadow-card rounded-xl transition-all duration-300;
+  }
+  .card-hover {
+    @apply hover:-translate-y-0.5 hover:shadow-md active:translate-y-0;
+  }
+  .btn-primary {
+    @apply inline-flex items-center justify-center rounded-lg bg-primary px-4 py-2 text-sm font-medium text-white shadow-sm transition-all duration-200 hover:bg-blue-600 hover:shadow-md active:scale-[0.98] disabled:opacity-70 disabled:cursor-not-allowed disabled:hover:scale-100;
+  }
+  .btn-ghost {
+    @apply rounded-lg px-2 py-1.5 text-slate-600 transition-colors duration-150 hover:bg-slate-100 hover:text-slate-800 active:bg-slate-200;
+  }
+  .input-base {
+    @apply w-full rounded-lg border border-slate-200 px-3 py-2.5 text-sm outline-none transition-all duration-200 focus:border-primary focus:ring-2 focus:ring-primary/20;
+  }
 }
 
-a {
-  @apply text-primary underline-offset-4 hover:underline;
+@layer utilities {
+  .animate-in {
+    animation: animate-in 0.3s ease-out forwards;
+  }
+  .animate-in-delay-1 {
+    animation: animate-in 0.35s ease-out 0.05s forwards;
+    opacity: 0;
+  }
+  .animate-in-delay-2 {
+    animation: animate-in 0.4s ease-out 0.1s forwards;
+    opacity: 0;
+  }
+  .animate-in-delay-3 {
+    animation: animate-in 0.45s ease-out 0.15s forwards;
+    opacity: 0;
+  }
+  .skeleton {
+    @apply bg-slate-200 rounded;
+    background: linear-gradient(
+      90deg,
+      rgb(226 232 240) 0%,
+      rgb(241 245 249) 50%,
+      rgb(226 232 240) 100%
+    );
+    background-size: 200% 100%;
+    animation: skeleton-shimmer 1.5s ease-in-out infinite;
+  }
 }
 
-.card {
-  @apply bg-white shadow-card rounded-xl;
+@keyframes animate-in {
+  from {
+    opacity: 0;
+    transform: translateY(-4px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes skeleton-shimmer {
+  0% {
+    background-position: 200% 0;
+  }
+  100% {
+    background-position: -200% 0;
+  }
+}
+
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes scale-in {
+  from {
+    opacity: 0;
+    transform: scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes slide-down {
+  from {
+    opacity: 0;
+    transform: translateY(-8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 

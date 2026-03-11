@@ -106,7 +106,7 @@ export function CategoryPageClient({
         <button
           type="button"
           onClick={openCreate}
-          className="inline-flex items-center rounded-lg bg-primary px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-blue-600"
+          className="btn-primary"
         >
           + 新建子分类
         </button>
@@ -128,7 +128,7 @@ export function CategoryPageClient({
           <button
             type="button"
             onClick={openCreate}
-            className="mt-2 rounded-lg bg-primary px-4 py-2 text-xs font-medium text-white shadow-sm hover:bg-blue-600"
+            className="btn-primary mt-2 text-xs"
           >
             新建子分类
           </button>
@@ -139,7 +139,7 @@ export function CategoryPageClient({
             <Link
               key={sub.id}
               href={`/${categoryId}/${sub.id}`}
-              className="card flex items-center justify-between px-4 py-4 transition hover:-translate-y-0.5 hover:shadow-md"
+              className="card card-hover flex items-center justify-between px-4 py-4"
             >
               <div className="flex flex-1 items-center gap-3">
                 <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary/10 text-lg">
@@ -197,7 +197,7 @@ export function CategoryPageClient({
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 placeholder="子分类名称"
-                className="w-full rounded-lg border border-slate-200 px-3 py-2.5 text-sm outline-none focus:border-primary focus:ring-1 focus:ring-primary"
+                className="input-base"
                 autoFocus
               />
               <div className="flex justify-end gap-2">
@@ -211,13 +211,16 @@ export function CategoryPageClient({
                 <button
                   type="submit"
                   disabled={submitting || !name.trim()}
-                  className="rounded-lg bg-primary px-4 py-2 text-sm font-medium text-white hover:bg-blue-600 disabled:opacity-70"
+                  className="btn-primary"
                 >
-                  {submitting
-                    ? editTarget
-                      ? "保存中..."
-                      : "创建中..."
-                    : "确定"}
+                  {submitting ? (
+                    <span className="inline-flex items-center gap-2">
+                      <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-white border-t-transparent" />
+                      {editTarget ? "保存中..." : "创建中..."}
+                    </span>
+                  ) : (
+                    "确定"
+                  )}
                 </button>
               </div>
             </form>

@@ -52,7 +52,7 @@ function LoginForm() {
 
   return (
     <div className="flex min-h-[calc(100vh-3.5rem-3rem)] items-center justify-center">
-      <div className="card w-full max-w-md px-8 py-10">
+      <div className="card w-full max-w-md px-8 py-10 animate-scale-in">
         <div className="mb-6 text-center">
           <div className="mx-auto mb-3 flex h-10 w-10 items-center justify-center rounded-lg bg-primary text-white text-xl">
             📅
@@ -84,7 +84,7 @@ function LoginForm() {
               name="username"
               type="text"
               placeholder="例如：zhaoxing"
-              className="w-full rounded-lg border border-slate-200 px-3 py-2.5 text-sm outline-none ring-0 transition focus:border-primary focus:ring-1 focus:ring-primary"
+              className="input-base"
             />
           </div>
           <div className="space-y-1.5">
@@ -99,7 +99,7 @@ function LoginForm() {
               name="password"
               type="password"
               placeholder="输入您的密码"
-              className="w-full rounded-lg border border-slate-200 px-3 py-2.5 text-sm outline-none ring-0 transition focus:border-primary focus:ring-1 focus:ring-primary"
+              className="input-base"
             />
           </div>
           <div className="flex items-center justify-end text-xs">
@@ -113,9 +113,16 @@ function LoginForm() {
           <button
             type="submit"
             disabled={isSubmitting}
-            className="flex w-full items-center justify-center rounded-lg bg-primary px-4 py-2.5 text-sm font-medium text-white shadow-sm transition hover:bg-blue-600 disabled:cursor-not-allowed disabled:opacity-70"
+            className="btn-primary w-full py-2.5"
           >
-            {isSubmitting ? "登录中..." : "登录"}
+            {isSubmitting ? (
+              <span className="inline-flex items-center justify-center gap-2">
+                <span className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" />
+                登录中...
+              </span>
+            ) : (
+              "登录"
+            )}
           </button>
         </form>
 
@@ -130,9 +137,28 @@ function LoginForm() {
   );
 }
 
+function LoginSkeleton() {
+  return (
+    <div className="flex min-h-[calc(100vh-3.5rem-3rem)] items-center justify-center">
+      <div className="card w-full max-w-md px-8 py-10 animate-in">
+        <div className="mb-6 flex flex-col items-center">
+          <div className="skeleton mb-3 h-10 w-10 rounded-lg" />
+          <div className="skeleton mb-2 h-5 w-32 rounded" />
+          <div className="skeleton h-4 w-48 rounded" />
+        </div>
+        <div className="space-y-4">
+          <div className="skeleton h-10 w-full rounded-lg" />
+          <div className="skeleton h-10 w-full rounded-lg" />
+          <div className="skeleton h-10 w-full rounded-lg" />
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function LoginPage() {
   return (
-    <Suspense fallback={<div className="flex min-h-[calc(100vh-3.5rem-3rem)] items-center justify-center">加载中...</div>}>
+    <Suspense fallback={<LoginSkeleton />}>
       <LoginForm />
     </Suspense>
   );

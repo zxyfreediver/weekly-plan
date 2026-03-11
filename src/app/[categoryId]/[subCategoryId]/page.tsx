@@ -427,7 +427,7 @@ export default function WeeklyTasksPage({ params }: WeeklyTasksPageProps) {
         <h1 className="text-xl font-semibold text-slate-900">周记清单</h1>
         <Link
           href={`/${categoryId}/${subCategoryId}/summary`}
-          className="inline-flex items-center rounded-lg bg-primary px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-blue-600"
+          className="btn-primary"
         >
           ✨ AI 总结
         </Link>
@@ -438,7 +438,7 @@ export default function WeeklyTasksPage({ params }: WeeklyTasksPageProps) {
           <button
             type="button"
             onClick={() => setWeekOffset((v) => v - 1)}
-            className="rounded-lg border border-slate-200 px-2 py-1 text-xs text-slate-600 hover:bg-slate-50"
+            className="btn-ghost rounded-lg border border-slate-200 px-2 py-1 text-xs text-slate-600"
           >
             上周
           </button>
@@ -446,7 +446,7 @@ export default function WeeklyTasksPage({ params }: WeeklyTasksPageProps) {
           <button
             type="button"
             onClick={() => setWeekOffset((v) => v + 1)}
-            className="rounded-lg border border-slate-200 px-2 py-1 text-xs text-slate-600 hover:bg-slate-50"
+            className="btn-ghost rounded-lg border border-slate-200 px-2 py-1 text-xs text-slate-600"
           >
             下周
           </button>
@@ -455,13 +455,29 @@ export default function WeeklyTasksPage({ params }: WeeklyTasksPageProps) {
 
       <div className="card space-y-3 px-4 py-4">
         {loading ? (
-          <div className="flex flex-col items-center justify-center gap-2 py-6 text-center">
-            <div className="h-4 w-4 animate-spin rounded-full border-2 border-slate-300 border-t-primary" />
-            <div className="text-xs text-slate-500">加载任务中...</div>
+          <div className="space-y-3 py-2 animate-in">
+            {[1, 2, 3, 4].map((i) => (
+              <div
+                key={i}
+                className="flex items-center gap-3 rounded-lg border border-slate-100 bg-slate-50 px-3 py-3"
+                style={{ animationDelay: `${i * 80}ms` }}
+              >
+                <div className="h-4 w-4 shrink-0 rounded border border-slate-200 skeleton" />
+                <div className="min-w-0 flex-1 space-y-2">
+                  <div className="h-4 w-16 skeleton rounded" />
+                  <div className="h-3 w-24 skeleton rounded" />
+                </div>
+              </div>
+            ))}
+            <div className="flex justify-center pt-2">
+              <div className="h-3 w-20 skeleton rounded" />
+            </div>
           </div>
         ) : sortedTasks.length === 0 ? (
-          <div className="flex flex-col items-center justify-center gap-2 py-6 text-center">
-            <div className="text-2xl">📝</div>
+          <div className="flex flex-col items-center justify-center gap-3 py-8 text-center animate-in">
+            <div className="flex h-14 w-14 items-center justify-center rounded-full bg-slate-100 text-2xl">
+              📝
+            </div>
             <div className="text-sm font-medium text-slate-900">
               本周还没有任务
             </div>
@@ -474,7 +490,7 @@ export default function WeeklyTasksPage({ params }: WeeklyTasksPageProps) {
             {sortedTasks.map((task) => (
               <li
                 key={task.id}
-                className="overflow-hidden rounded-lg border border-slate-100 bg-slate-50"
+                className="overflow-hidden rounded-lg border border-slate-100 bg-slate-50 transition-shadow duration-200 hover:shadow-sm"
               >
                 <div className="flex items-center justify-between px-3 py-2.5">
                   <div className="flex flex-1 items-center gap-3">
@@ -576,7 +592,7 @@ export default function WeeklyTasksPage({ params }: WeeklyTasksPageProps) {
                   </div>
                 </div>
                 {expandedTaskId === task.id && (
-                  <div className="border-t border-slate-100 bg-white px-3 py-3">
+                  <div className="animate-slide-down border-t border-slate-100 bg-white px-3 py-3">
                     <div className="space-y-2">
                       <div className="text-xs font-medium text-slate-500">
                         子任务
@@ -745,11 +761,11 @@ export default function WeeklyTasksPage({ params }: WeeklyTasksPageProps) {
 
       {editTask && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 animate-fade-in"
           onClick={() => !editSubmitting && setEditTask(null)}
         >
           <div
-            className="card w-full max-w-md p-6"
+            className="card w-full max-w-md p-6 animate-scale-in"
             onClick={(e) => e.stopPropagation()}
           >
             <h2 className="text-lg font-semibold text-slate-900">编辑任务</h2>
@@ -790,9 +806,16 @@ export default function WeeklyTasksPage({ params }: WeeklyTasksPageProps) {
                 <button
                   type="submit"
                   disabled={editSubmitting || !editContent.trim()}
-                  className="rounded-lg bg-primary px-4 py-2 text-sm font-medium text-white hover:bg-blue-600 disabled:opacity-70"
+                  className="btn-primary"
                 >
-                  {editSubmitting ? "保存中..." : "保存"}
+                  {editSubmitting ? (
+                    <span className="inline-flex items-center gap-2">
+                      <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-white border-t-transparent" />
+                      保存中...
+                    </span>
+                  ) : (
+                    "保存"
+                  )}
                 </button>
               </div>
             </form>
@@ -868,7 +891,7 @@ export default function WeeklyTasksPage({ params }: WeeklyTasksPageProps) {
                 <button
                   type="submit"
                   disabled={!editSubTaskContent.trim()}
-                  className="rounded-lg bg-primary px-4 py-2 text-sm font-medium text-white hover:bg-blue-600 disabled:opacity-70"
+                  className="btn-primary"
                 >
                   保存
                 </button>
@@ -880,11 +903,11 @@ export default function WeeklyTasksPage({ params }: WeeklyTasksPageProps) {
 
       {deleteConfirm && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 animate-fade-in"
           onClick={() => setDeleteConfirm(null)}
         >
           <div
-            className="card w-full max-w-md p-6"
+            className="card w-full max-w-md p-6 animate-scale-in"
             onClick={(e) => e.stopPropagation()}
           >
             <h2 className="text-lg font-semibold text-slate-900">删除任务</h2>
@@ -913,11 +936,11 @@ export default function WeeklyTasksPage({ params }: WeeklyTasksPageProps) {
 
       {deleteSubTaskConfirm && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 animate-fade-in"
           onClick={() => setDeleteSubTaskConfirm(null)}
         >
           <div
-            className="card w-full max-w-md p-6"
+            className="card w-full max-w-md p-6 animate-scale-in"
             onClick={(e) => e.stopPropagation()}
           >
             <h2 className="text-lg font-semibold text-slate-900">删除子任务</h2>
@@ -959,12 +982,12 @@ export default function WeeklyTasksPage({ params }: WeeklyTasksPageProps) {
             placeholder="添加新任务..."
             value={newTask}
             onChange={(e) => setNewTask(e.target.value)}
-            className="w-full flex-1 rounded-lg border border-slate-200 px-3 py-2.5 text-sm outline-none ring-0 transition focus:border-primary focus:ring-1 focus:ring-primary"
+            className="input-base flex-1"
           />
           <button
             type="button"
             onClick={handleAddTask}
-            className="rounded-lg bg-primary px-4 py-2 text-xs font-medium text-white shadow-sm hover:bg-blue-600"
+            className="btn-primary text-xs"
           >
             添加
           </button>
