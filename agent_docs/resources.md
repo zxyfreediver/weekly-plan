@@ -14,6 +14,7 @@
 - `docs/TechDesign-周记清单-MVP.md` — 技术设计
 - `docs/UI-Spec-周记清单-Stitch.md` — UI 规格
 - `docs/DEPLOY-VERCEL-SUPABASE.md` — 部署指南
+- `docs/DESIGN-import-weekly-incomplete.md` — 一键导入上周未完成（设计）
 - `docs/research-prompt-task-ai-summary.md` — 调研提示词
 
 ## 参考仓库

@@ -102,6 +102,8 @@ export default function WeeklyTasksPage({ params }: WeeklyTasksPageProps) {
     taskId: string;
     subTaskId: string;
   } | null>(null);
+  const [importLoading, setImportLoading] = useState(false);
+  const [importToast, setImportToast] = useState<string | null>(null);
 
   const getDueDateStatus = (dueDate: string | null) => {
     if (!dueDate) return null;
@@ -148,6 +150,23 @@ export default function WeeklyTasksPage({ params }: WeeklyTasksPageProps) {
     return () => controller.abort();
   }, [categoryId, subCategoryId]);
 
+  const loadTasks = async () => {
+    setLoading(true);
+    try {
+      const url = `/api/tasks?subCategoryId=${encodeURIComponent(
+        subCategoryId,
+      )}&weekStart=${weekInfo.start}`;
+      const res = await fetch(url);
+      if (!res.ok) return;
+      const data: Task[] = await res.json();
+      setTasks(data);
+    } catch (error) {
+      console.error(error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   useEffect(() => {
     const controller = new AbortController();
     const load = async () => {
@@ -169,6 +188,47 @@ export default function WeeklyTasksPage({ params }: WeeklyTasksPageProps) {
     void load();
     return () => controller.abort();
   }, [categoryId, subCategoryId, weekInfo.start]);
+
+  const handleImportFromLastWeek = async () => {
+    setImportLoading(true);
+    setImportToast(null);
+    try {
+      const res = await fetch("/api/tasks/import-from-last-week", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          subCategoryId,
+          weekStart: weekInfo.start,
+        }),
+      });
+      const data = (await res.json()) as {
+        imported?: number;
+        skipped?: number;
+        message?: string;
+        error?: string;
+      };
+      if (!res.ok) {
+        setImportToast(data.error ?? "导入失败");
+        return;
+      }
+      if (data.message) {
+        setImportToast(data.message);
+      } else if ((data.imported ?? 0) > 0 || (data.skipped ?? 0) > 0) {
+        setImportToast(
+          `已导入 ${data.imported ?? 0} 项${(data.skipped ?? 0) > 0 ? `，跳过 ${data.skipped} 项（已存在）` : ""}`,
+        );
+      }
+      if ((data.imported ?? 0) > 0) {
+        await loadTasks();
+      }
+    } catch (error) {
+      console.error(error);
+      setImportToast("导入失败");
+    } finally {
+      setImportLoading(false);
+      setTimeout(() => setImportToast(null), 3000);
+    }
+  };
 
   const getTaskStats = (task: Task) => {
     const total = task.subTasks.length;
@@ -902,6 +962,18 @@ export default function WeeklyTasksPage({ params }: WeeklyTasksPageProps) {
           >
             {isAllExpanded ? "一键收起" : "一键展开"}
           </button>
+          <button
+            type="button"
+            onClick={handleImportFromLastWeek}
+            disabled={importLoading}
+            title="将上周未完成的主任务、子任务、进度复制到本周，与本周任务合并"
+            className="btn-ghost rounded-lg border border-slate-200 px-2 py-1 text-xs text-slate-600 hover:bg-slate-50 disabled:opacity-50"
+          >
+            {importLoading ? "导入中…" : "导入上周未完成"}
+          </button>
+          {importToast && (
+            <span className="text-xs text-slate-500">{importToast}</span>
+          )}
           <label className="flex cursor-pointer items-center gap-1.5 text-xs text-slate-600">
             <input
               type="checkbox"

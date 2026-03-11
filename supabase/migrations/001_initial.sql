@@ -48,6 +48,7 @@ CREATE TABLE IF NOT EXISTS tasks (
   description TEXT DEFAULT '',
   is_completed BOOLEAN DEFAULT FALSE,
   week_start DATE NOT NULL,
+  source_task_id TEXT REFERENCES tasks(id) ON DELETE SET NULL,
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
@@ -65,6 +66,7 @@ CREATE TABLE IF NOT EXISTS sub_tasks (
   is_priority BOOLEAN DEFAULT FALSE,
   due_date DATE,
   sort_order INTEGER DEFAULT 0,
+  source_sub_task_id TEXT REFERENCES sub_tasks(id) ON DELETE SET NULL,
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
@@ -81,8 +83,12 @@ CREATE TABLE IF NOT EXISTS sub_task_progress (
   is_completed BOOLEAN DEFAULT FALSE,
   due_date DATE,
   sort_order INTEGER DEFAULT 0,
+  source_progress_id TEXT REFERENCES sub_task_progress(id) ON DELETE SET NULL,
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
 CREATE INDEX IF NOT EXISTS idx_sub_task_progress_sub_task_id ON sub_task_progress(sub_task_id);
+CREATE INDEX IF NOT EXISTS idx_tasks_source_task_id ON tasks(source_task_id);
+CREATE INDEX IF NOT EXISTS idx_sub_tasks_source ON sub_tasks(source_sub_task_id);
+CREATE INDEX IF NOT EXISTS idx_sub_task_progress_source ON sub_task_progress(source_progress_id);
