@@ -30,7 +30,9 @@ src/
 │       ├── auth/login, logout
 │       ├── categories/
 │       ├── sub-categories/
-│       └── tasks/
+│       ├── tasks/
+│       ├── tasks/[id]/sub-tasks/
+│       └── sub-tasks/[id]/progress/
 ├── components/
 ├── lib/
 │   ├── supabase.ts      # Supabase 客户端
@@ -82,5 +84,5 @@ try {
 
 - 组件：PascalCase
 - 文件：kebab-case 或 PascalCase（组件）
-- API 路由：REST 风格，如 `/api/categories`, `/api/tasks/[id]`
-- 数据库表：snake_case
+- API 路由：REST 风格，如 `/api/categories`, `/api/tasks/[id]`, `/api/sub-tasks/[id]/progress`
+- 数据库表：snake_case（users, categories, sub_categories, tasks, sub_tasks, sub_task_progress）

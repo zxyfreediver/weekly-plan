@@ -4,11 +4,7 @@
 
 1. 打开 [supabase.com](https://supabase.com) 并登录
 2. 新建项目，选择区域
-3. **必须**：进入 **SQL Editor**，按顺序执行：
-   - `supabase/migrations/001_initial.sql`：创建 `users`、`categories`、`sub_categories`、`tasks` 表
-   - `supabase/migrations/002_sub_tasks.sql`：创建 `sub_tasks` 表，支持子任务功能
-   - `supabase/migrations/003_default_user.sql`：插入默认用户 `zhaoxingyu`（需与 `.env` 中 `AUTH_USERNAME` 一致）
-   - `supabase/migrations/004_categories_user_fk.sql`：建立 `categories.user_id` → `users.id` 外键关联
+3. **必须**：进入 **SQL Editor**，执行 `supabase/migrations/001_initial.sql`（包含完整表结构与默认用户 `admin`）。
    **未执行会导致创建分类等操作失败。**
 
 ## 2. 获取 Supabase 凭证
@@ -26,7 +22,7 @@
 
 | 变量名 | 值 | 说明 |
 |-------|-----|------|
-| `AUTH_USERNAME` | 你的登录账号（需与 003 中默认用户 id 一致，如 `zhaoxingyu`） | |
+| `AUTH_USERNAME` | 登录账号（需与 migration 中默认用户 id 一致，默认 `admin`） | |
 | `AUTH_PASSWORD` | 你的登录密码 | |
 | `NEXT_PUBLIC_SUPABASE_URL` | `https://xxx.supabase.co` | Supabase Settings → API 中的 Project URL |
 | `SUPABASE_SERVICE_ROLE_KEY` | `sb_secret_...` | Supabase Settings → API 中的 Secret keys |
@@ -50,7 +46,7 @@ pnpm dev
 ### 创建分类无报错但未创建成功
 
 - **原因**：未执行建表 SQL，或 Supabase 返回错误但未检查
-- **处理**：在 Supabase SQL Editor 执行 `supabase/migrations/001_initial.sql`，确保表已创建
+- **处理**：在 Supabase SQL Editor 执行 `supabase/migrations/001_initial.sql`，确保表与默认用户已创建
 
 ### ENOTFOUND / getaddrinfo 解析失败
 

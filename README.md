@@ -29,7 +29,7 @@ pnpm install
 
 # 配置环境变量
 cp .env.example .env.local
-# 编辑 .env.local 填入 AUTH_USERNAME、AUTH_PASSWORD、Supabase 凭证
+# 编辑 .env.local 填入 AUTH_USERNAME（默认 admin）、AUTH_PASSWORD、Supabase 凭证
 
 # 启动开发服务器
 pnpm dev

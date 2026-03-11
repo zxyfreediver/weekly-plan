@@ -3,7 +3,7 @@
 ## Project Context
 
 **App:** 周记清单（Weekly Journal Checklist）
-**Stack:** Next.js 14 + Tailwind CSS + SQLite + Docker + PWA
+**Stack:** Next.js 16 + Tailwind CSS + Supabase + Vercel + PWA
 **Stage:** MVP Development
 **User Level:** Developer
 

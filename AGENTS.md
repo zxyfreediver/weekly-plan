@@ -56,9 +56,9 @@
 
 ## Current State (Update This!)
 
-**Last Updated:** 2025-03-11
-**Working On:** 文档完善
-**Recently Completed:** Vercel+Supabase 迁移、任务描述与展开、UI 优化、部署文档
+**Last Updated:** 2025-03-10
+**Working On:** -
+**Recently Completed:** 子任务与进度、一键展开/收起、不展示已完成、Supabase 脚本合并（默认用户 admin）、文档更新
 **Blocked By:** None
 
 ## Roadmap
@@ -72,9 +72,10 @@
 
 ### Phase 2: Core Features ✅
 - [x] 多级分类（大分类 + 子分类）
-- [x] 周度任务列表（增删改、划掉完成）
-- [x] 任务优先级（高亮）
+- [x] 周度任务列表（主任务 → 子任务 → 进度，增删改、划掉完成）
+- [x] 任务优先级（高亮，子任务/进度层）
 - [x] 任务描述（2 行预览 + 展开编辑）
+- [x] 一键展开/收起、不展示已完成
 - [ ] 未完成自动同步到本周
 
 ### Phase 3: Enhancement

@@ -144,65 +144,44 @@ src/
 
 ### Database Schema
 
+实际 schema 以 `supabase/migrations/001_initial.sql` 为准，概要如下：
+
 ```sql
 -- 用户表
 CREATE TABLE users (
     id TEXT PRIMARY KEY,
-    email TEXT UNIQUE NOT NULL,
+    email TEXT UNIQUE,
     password_hash TEXT,
     name TEXT,
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
-);
-
--- 大分类 (工作/生活/家庭)
-CREATE TABLE categories (
-    id TEXT PRIMARY KEY,
-    user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    name TEXT NOT NULL,
-    sort_order INTEGER DEFAULT 0,
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
-);
-
--- 子分类 (2025年工作, 2026年工作 等)
-CREATE TABLE sub_categories (
-    id TEXT PRIMARY KEY,
-    category_id TEXT NOT NULL REFERENCES categories(id) ON DELETE CASCADE,
-    name TEXT NOT NULL,
-    sort_order INTEGER DEFAULT 0,
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
-);
-
--- 任务
-CREATE TABLE tasks (
-    id TEXT PRIMARY KEY,
-    sub_category_id TEXT NOT NULL REFERENCES sub_categories(id) ON DELETE CASCADE,
-    content TEXT NOT NULL,
-    description TEXT DEFAULT '',  -- 任务详细描述
-    is_completed BOOLEAN DEFAULT FALSE,
-    is_priority BOOLEAN DEFAULT FALSE,
-    week_start DATE NOT NULL,     -- 所属周的周一日期
     created_at TIMESTAMPTZ DEFAULT NOW(),
     updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- 简单统计 (可选，也可实时计算)
-CREATE TABLE stats (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    user_id TEXT NOT NULL REFERENCES users(id),
-    metric TEXT NOT NULL,
-    value INTEGER DEFAULT 0,
-    period TEXT,                  -- 'day' | 'week' | 'month'
-    recorded_at DATETIME DEFAULT CURRENT_TIMESTAMP
+-- 大分类 (工作/生活/家庭)
+CREATE TABLE categories (...);
+
+-- 子分类 (2025年工作, 2026年工作 等)
+CREATE TABLE sub_categories (...);
+
+-- 主任务（无 is_priority，优先级在子任务层）
+CREATE TABLE tasks (
+    id TEXT PRIMARY KEY,
+    sub_category_id TEXT NOT NULL REFERENCES sub_categories(id) ON DELETE CASCADE,
+    content TEXT NOT NULL,
+    description TEXT DEFAULT '',
+    is_completed BOOLEAN DEFAULT FALSE,
+    week_start DATE NOT NULL,
+    ...
 );
 
--- 索引
-CREATE INDEX idx_tasks_sub_category_week ON tasks(sub_category_id, week_start);
-CREATE INDEX idx_categories_user ON categories(user_id);
-CREATE INDEX idx_sub_categories_category ON sub_categories(category_id);
+-- 子任务（含 description、assignee、is_priority、due_date）
+CREATE TABLE sub_tasks (...);
+
+-- 子任务进度（含 content、assignee、is_priority、is_completed、due_date）
+CREATE TABLE sub_task_progress (...);
 ```
+
+默认用户：`INSERT INTO users (id, name) VALUES ('admin', 'admin')`，`AUTH_USERNAME` 需与此一致。
 
 ---
 
@@ -530,6 +509,6 @@ jobs:
 
 ---
 
-*Version: 1.1*
-*Last Updated: 2025-03-11*
+*Version: 1.2*
+*Last Updated: 2025-03-10*
 *Next Review: 2025-04-10*

@@ -2,6 +2,23 @@
 
 ## [Unreleased]
 
+## 2025-03-10（近期）
+
+### 新增
+
+- **一键展开/收起**：周度任务页增加「一键展开」「一键收起」按钮，可一次性展开/收起所有主任务、子任务及进度
+- **不展示已完成**：周度任务页增加「不展示已完成」勾选框，勾选后隐藏已完成的主任务、子任务、进度及「本周已完成」汇总区
+
+### 变更
+
+- **Supabase 脚本**：将 7 个 migration 合并为单一 `001_initial.sql`，包含完整表结构与默认用户
+- **默认用户**：默认用户由 `zhaoxingyu` 改为 `admin/admin`，`.env.example` 中 `AUTH_USERNAME=admin`
+
+### 文档
+
+- 更新 `docs/DEPLOY-VERCEL-SUPABASE.md` 部署说明
+- 更新 `CHANGELOG.md`、`README.md`、`docs/TechDesign-周记清单-MVP.md`、`docs/UI-Spec-周记清单-Stitch.md`、`docs/PRD-周记清单-MVP.md`、`agent_docs/*`、`AGENTS.md`
+
 ## 2025-03-11
 
 ### 新增
