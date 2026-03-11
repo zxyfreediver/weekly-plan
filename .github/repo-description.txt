@@ -1,7 +1,55 @@
-# GitHub 仓库描述建议（复制到 Settings → General → Description）
+# GitHub 仓库描述与 Topics 设置指南
 
+## 一、在哪里设置？
+
+打开你的仓库首页，例如：https://github.com/你的用户名/weekly-plan
+
+在仓库名称下方、右侧，有一个 **About** 区域（显示「⭐ Star」等按钮的旁边）。  
+点击 **About** 右侧的 **小齿轮图标 ⚙️**，即可编辑 Description 和 Topics。
+
+如果看不到 About：
+- 在仓库名称正下方，可能有一行灰色小字，那就是 Description
+- 点击旁边的铅笔图标 ✏️ 或齿轮 ⚙️ 进行编辑
+
+---
+
+## 二、Description（仓库描述）
+
+复制下面这段文字，粘贴到 Description 输入框：
+
+```
 周记清单：个人周度任务管理工具，支持周报、月报、年报 AI 智能总结。按周组织待办清单，一键生成周报月报。Next.js + Supabase + Vercel + PWA
+```
 
-# GitHub Topics 建议（在仓库页添加 Topics）
+---
 
-weekly-plan, 周记, 清单, 周报, 月报, 年报, 智能总结, ai-summary, task-management, nextjs, supabase, vercel, pwa
+## 三、Topics（标签）
+
+在 Topics 输入框中，逐个添加以下标签（每输入一个按回车添加）：
+
+- weekly-plan
+- 周记
+- 清单
+- 周报
+- 月报
+- 年报
+- 智能总结
+- ai-summary
+- task-management
+- nextjs
+- supabase
+- vercel
+- pwa
+
+注意：Topics 不支持中文时，可只添加英文标签，如 weekly-plan, nextjs, supabase, vercel, pwa, task-management, ai-summary
+
+---
+
+## 四、备选路径（Settings）
+
+如果上述方式找不到，可尝试：
+
+1. 进入仓库 → 点击 **Settings**（设置）
+2. 在左侧 **General** 下
+3. 找到 **Repository name** 下方的 **Description** 输入框
+4. 粘贴描述并保存
