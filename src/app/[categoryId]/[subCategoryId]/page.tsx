@@ -668,6 +668,84 @@ export default function WeeklyTasksPage({ params }: WeeklyTasksPageProps) {
       return 0;
     });
 
+  const completedSummary = useMemo(() => {
+    type SubTaskGroup = { subTask: SubTask; progress: Progress[] };
+    const result: {
+      task: Task;
+      hasTaskCompleted: boolean;
+      subTaskGroups: SubTaskGroup[];
+    }[] = [];
+    for (const task of tasks) {
+      const subTaskMap = new Map<string, SubTaskGroup>();
+      for (const st of task.subTasks ?? []) {
+        const completedProgress = (st.progress ?? []).filter((p) => p.isCompleted);
+        if (st.isCompleted || completedProgress.length > 0) {
+          subTaskMap.set(st.id, { subTask: st, progress: completedProgress });
+        }
+      }
+      const hasTaskCompleted = task.isCompleted;
+      if (hasTaskCompleted || subTaskMap.size > 0) {
+        result.push({
+          task,
+          hasTaskCompleted,
+          subTaskGroups: Array.from(subTaskMap.values()),
+        });
+      }
+    }
+    return result;
+  }, [tasks]);
+
+  const [copiedId, setCopiedId] = useState<string | null>(null);
+
+  const buildTaskSummaryText = (group: {
+    task: Task;
+    hasTaskCompleted: boolean;
+    subTaskGroups: { subTask: SubTask; progress: Progress[] }[];
+  }) => {
+    const lines: string[] = [];
+    lines.push(
+      group.hasTaskCompleted ? `✓ ${group.task.content}` : group.task.content,
+    );
+    for (const { subTask, progress } of group.subTaskGroups) {
+      if (subTask.isCompleted) {
+        lines.push(`  ✓ ${subTask.content}`);
+      }
+      if (progress.length > 0) {
+        if (!subTask.isCompleted) {
+          lines.push(`  ${subTask.content}`);
+        }
+        for (const p of progress) {
+          lines.push(`    ✓ ${p.content}`);
+        }
+      }
+    }
+    return lines.join("\n");
+  };
+
+  const buildFullSummaryText = () => {
+    const header = `本周已完成 (${weekInfo.label})\n\n`;
+    const body = completedSummary
+      .map((g) => buildTaskSummaryText(g))
+      .filter((s) => s.trim())
+      .join("\n\n");
+    return header + body;
+  };
+
+  const handleCopyTask = async (taskId: string) => {
+    const group = completedSummary.find((g) => g.task.id === taskId);
+    if (!group) return;
+    const text = buildTaskSummaryText(group);
+    await navigator.clipboard.writeText(text);
+    setCopiedId(taskId);
+    setTimeout(() => setCopiedId(null), 1500);
+  };
+
+  const handleCopyAll = async () => {
+    await navigator.clipboard.writeText(buildFullSummaryText());
+    setCopiedId("all");
+    setTimeout(() => setCopiedId(null), 1500);
+  };
+
   const handleToggleProgressCompleted = async (
     taskId: string,
     subTaskId: string,
@@ -1703,6 +1781,93 @@ export default function WeeklyTasksPage({ params }: WeeklyTasksPageProps) {
           </button>
         </div>
       </div>
+
+      {completedSummary.length > 0 && (
+        <div className="card overflow-hidden px-4 py-4">
+          <div className="mb-3 flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <h3 className="text-sm font-semibold text-slate-800">
+                ✓ 本周已完成
+              </h3>
+              <button
+                type="button"
+                onClick={handleCopyAll}
+                className="rounded px-2 py-0.5 text-xs text-slate-500 hover:bg-slate-100 hover:text-slate-700"
+                title="复制全部"
+              >
+                {copiedId === "all" ? "已复制" : "复制全部"}
+              </button>
+            </div>
+            <span className="text-xs text-slate-500">{weekInfo.label}</span>
+          </div>
+          <div className="space-y-3">
+            {completedSummary.map(({ task, hasTaskCompleted, subTaskGroups }) => (
+              <div
+                key={task.id}
+                className="rounded-lg bg-slate-50/80 py-2"
+              >
+                <div className="flex items-center justify-between gap-2 px-2 py-1">
+                  <div className="flex min-w-0 flex-1 items-center gap-2">
+                    {hasTaskCompleted && (
+                      <>
+                        <span className="shrink-0 text-primary">✓</span>
+                        <span className="text-sm font-medium text-slate-800">
+                          {task.content}
+                        </span>
+                      </>
+                    )}
+                    {!hasTaskCompleted && subTaskGroups.length > 0 && (
+                      <span className="text-sm font-medium text-slate-700">
+                        {task.content}
+                      </span>
+                    )}
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => handleCopyTask(task.id)}
+                    className="shrink-0 rounded px-1.5 py-0.5 text-xs text-slate-500 hover:bg-slate-200 hover:text-slate-700"
+                    title="复制此项"
+                  >
+                    {copiedId === task.id ? "已复制" : "复制"}
+                  </button>
+                </div>
+                {subTaskGroups.map(({ subTask, progress }) => (
+                  <div key={subTask.id} className="pl-4">
+                    {subTask.isCompleted && (
+                      <div className="flex items-center gap-2 px-2 py-0.5">
+                        <span className="shrink-0 text-[10px] text-primary">
+                          ✓
+                        </span>
+                        <span className="text-sm text-slate-600">
+                          {subTask.content}
+                        </span>
+                      </div>
+                    )}
+                    {progress.length > 0 && !subTask.isCompleted && (
+                      <div className="px-2 py-0.5 text-sm font-medium text-slate-600">
+                        {subTask.content}
+                      </div>
+                    )}
+                    {progress.map((p) => (
+                      <div
+                        key={p.id}
+                        className="flex items-center gap-2 pl-6 pr-2 py-0.5"
+                      >
+                        <span className="shrink-0 text-[10px] text-primary">
+                          ✓
+                        </span>
+                        <span className="text-sm text-slate-600">
+                          {p.content}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                ))}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
