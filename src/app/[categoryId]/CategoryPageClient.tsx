@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import useSWR from "swr";
 import { FormEvent, useState } from "react";
 
 type SubCategory = {
@@ -10,26 +10,32 @@ type SubCategory = {
   pendingCount: number;
 };
 
-export function CategoryPageClient({
-  categoryId,
-  categoryName,
-  subCategories,
-}: {
-  categoryId: string;
-  categoryName: string;
+type CategoryData = {
+  name: string;
   subCategories: SubCategory[];
-}) {
-  const router = useRouter();
+};
+
+const fetcher = (url: string) => fetch(url).then((r) => r.json());
+
+export function CategoryPageClient({ categoryId }: { categoryId: string }) {
+  const { data, isLoading, error: fetchError, mutate } = useSWR<CategoryData>(
+    `/api/categories/${categoryId}`,
+    fetcher,
+    { revalidateOnFocus: false, dedupingInterval: 5000 },
+  );
+
+  const categoryName = data?.name ?? "";
+  const subCategories = data?.subCategories ?? [];
   const [modalOpen, setModalOpen] = useState(false);
+  const [formError, setFormError] = useState<string | null>(null);
   const [editTarget, setEditTarget] = useState<SubCategory | null>(null);
   const [name, setName] = useState("");
   const [submitting, setSubmitting] = useState(false);
-  const [error, setError] = useState<string | null>(null);
 
   const openCreate = () => {
     setEditTarget(null);
     setName("");
-    setError(null);
+    setFormError(null);
     setModalOpen(true);
   };
 
@@ -38,13 +44,13 @@ export function CategoryPageClient({
     e.stopPropagation();
     setEditTarget(sub);
     setName(sub.name);
-    setError(null);
+    setFormError(null);
     setModalOpen(true);
   };
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
-    setError(null);
+    setFormError(null);
     setSubmitting(true);
     try {
       const trimmed = name.trim();
@@ -56,7 +62,7 @@ export function CategoryPageClient({
         });
         if (!res.ok) {
           const data = (await res.json().catch(() => null)) as { error?: string };
-          setError(data?.error ?? "更新失败");
+          setFormError(data?.error ?? "更新失败");
           setSubmitting(false);
           return;
         }
@@ -68,7 +74,7 @@ export function CategoryPageClient({
         });
         if (!res.ok) {
           const data = (await res.json().catch(() => null)) as { error?: string };
-          setError(data?.error ?? "创建失败");
+          setFormError(data?.error ?? "创建失败");
           setSubmitting(false);
           return;
         }
@@ -76,13 +82,45 @@ export function CategoryPageClient({
       setName("");
       setEditTarget(null);
       setModalOpen(false);
-      router.refresh();
+      setSubmitting(false);
+      void mutate();
     } catch (err) {
       console.error(err);
-      setError("网络异常");
+      setFormError("网络异常");
       setSubmitting(false);
     }
   };
+
+  if (isLoading) {
+    return (
+      <div className="space-y-6">
+        <nav className="h-4 w-48 rounded bg-slate-100 skeleton" />
+        <div className="space-y-3">
+          {[1, 2, 3, 4].map((i) => (
+            <div key={i} className="card flex items-center gap-3 px-4 py-4">
+              <div className="h-9 w-9 rounded-lg bg-slate-100 skeleton" />
+              <div className="h-4 w-32 rounded bg-slate-100 skeleton" />
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+  if (fetchError) {
+    return (
+      <div className="space-y-6">
+        <nav className="text-xs text-slate-500">
+          <Link href="/" className="hover:text-slate-700 hover:underline">
+            首页
+          </Link>
+        </nav>
+        <div className="card py-12 text-center text-sm text-slate-500">
+          分类不存在或加载失败
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -186,9 +224,9 @@ export function CategoryPageClient({
             <p className="mt-1 text-xs text-slate-500">
               输入子分类名称，如：2025年工作、2026年工作
             </p>
-            {error && (
+            {formError && (
               <div className="mt-3 rounded-md bg-red-50 px-3 py-2 text-xs text-red-600">
-                {error}
+                {formError}
               </div>
             )}
             <form onSubmit={handleSubmit} className="mt-4 space-y-4">

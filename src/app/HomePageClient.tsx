@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import useSWR from "swr";
 import { FormEvent, useState } from "react";
 
 type CategoryWithStats = {
@@ -11,12 +11,14 @@ type CategoryWithStats = {
   completedCount: number;
 };
 
-export function HomePageClient({
-  categories,
-}: {
-  categories: CategoryWithStats[];
-}) {
-  const router = useRouter();
+const fetcher = (url: string) => fetch(url).then((r) => r.json());
+
+export function HomePageClient() {
+  const { data: categories = [], isLoading, mutate } = useSWR<CategoryWithStats[]>(
+    "/api/categories",
+    fetcher,
+    { revalidateOnFocus: false, dedupingInterval: 5000 },
+  );
   const [modalOpen, setModalOpen] = useState(false);
   const [editTarget, setEditTarget] = useState<CategoryWithStats | null>(null);
   const [name, setName] = useState("");
@@ -51,12 +53,12 @@ export function HomePageClient({
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ name: trimmed }),
         });
-        if (!res.ok) {
-          const data = (await res.json().catch(() => null)) as { error?: string };
-          setError(data?.error ?? "更新失败");
-          setSubmitting(false);
-          return;
-        }
+      if (!res.ok) {
+        const data = (await res.json().catch(() => null)) as { error?: string };
+        setError(data?.error ?? "更新失败");
+        setSubmitting(false);
+        return;
+      }
       } else {
         const res = await fetch("/api/categories", {
           method: "POST",
@@ -73,13 +75,31 @@ export function HomePageClient({
       setName("");
       setEditTarget(null);
       setModalOpen(false);
-      router.refresh();
+      setSubmitting(false);
+      void mutate();
     } catch (err) {
       console.error(err);
       setError("网络异常");
       setSubmitting(false);
     }
   };
+
+  if (isLoading) {
+    return (
+      <div className="space-y-6">
+        <div className="h-8 w-48 rounded bg-slate-100 skeleton" />
+        <div className="grid gap-4 md:grid-cols-3">
+          {[1, 2, 3].map((i) => (
+            <div key={i} className="card flex flex-col gap-3 p-4">
+              <div className="h-10 w-10 rounded-lg bg-slate-100 skeleton" />
+              <div className="h-4 w-24 rounded bg-slate-100 skeleton" />
+              <div className="h-1.5 rounded-full bg-slate-100 skeleton" />
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
