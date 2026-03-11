@@ -71,7 +71,7 @@ export default function WeeklyTasksPage({ params }: WeeklyTasksPageProps) {
   const [editDescription, setEditDescription] = useState("");
   const [editSubmitting, setEditSubmitting] = useState(false);
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
-  const [expandedTaskId, setExpandedTaskId] = useState<string | null>(null);
+  const [expandedTaskIds, setExpandedTaskIds] = useState<Set<string>>(new Set());
   const [newSubTaskId, setNewSubTaskId] = useState<string | null>(null);
   const [newSubTaskContent, setNewSubTaskContent] = useState("");
   const [newSubTaskDesc, setNewSubTaskDesc] = useState("");
@@ -85,7 +85,8 @@ export default function WeeklyTasksPage({ params }: WeeklyTasksPageProps) {
   const [editSubTaskPriority, setEditSubTaskPriority] = useState(false);
   const [editSubTaskDueDate, setEditSubTaskDueDate] = useState("");
   const [deleteSubTaskConfirm, setDeleteSubTaskConfirm] = useState<string | null>(null);
-  const [expandedSubTaskId, setExpandedSubTaskId] = useState<string | null>(null);
+  const [expandedSubTaskIds, setExpandedSubTaskIds] = useState<Set<string>>(new Set());
+  const [hideCompleted, setHideCompleted] = useState(false);
   const [newProgressSubTaskId, setNewProgressSubTaskId] = useState<string | null>(null);
   const [newProgressContent, setNewProgressContent] = useState("");
   const [newProgressAssignee, setNewProgressAssignee] = useState("");
@@ -193,6 +194,11 @@ export default function WeeklyTasksPage({ params }: WeeklyTasksPageProps) {
     return copy;
   }, [tasks]);
 
+  const displayTasks = useMemo(() => {
+    if (!hideCompleted) return sortedTasks;
+    return sortedTasks.filter((t) => !t.isCompleted);
+  }, [sortedTasks, hideCompleted]);
+
   const handleToggleCompleted = async (task: Task) => {
     const nextCompleted = !task.isCompleted;
     setTasks((prev) =>
@@ -219,13 +225,17 @@ export default function WeeklyTasksPage({ params }: WeeklyTasksPageProps) {
   };
 
   const toggleExpand = (task: Task) => {
-    if (expandedTaskId === task.id) {
-      setExpandedTaskId(null);
+    if (expandedTaskIds.has(task.id)) {
+      setExpandedTaskIds((prev) => {
+        const next = new Set(prev);
+        next.delete(task.id);
+        return next;
+      });
       setNewSubTaskId(null);
       setEditSubTask(null);
       return;
     }
-    setExpandedTaskId(task.id);
+    setExpandedTaskIds((prev) => new Set(prev).add(task.id));
     setNewSubTaskContent("");
     setNewSubTaskDesc("");
     setNewSubTaskAssignee("");
@@ -270,7 +280,11 @@ export default function WeeklyTasksPage({ params }: WeeklyTasksPageProps) {
       if (!res.ok) return;
       setTasks((prev) => prev.filter((t) => t.id !== taskId));
       setDeleteConfirm(null);
-      if (expandedTaskId === taskId) setExpandedTaskId(null);
+      setExpandedTaskIds((prev) => {
+        const next = new Set(prev);
+        next.delete(taskId);
+        return next;
+      });
     } catch (err) {
       console.error(err);
     }
@@ -459,7 +473,11 @@ export default function WeeklyTasksPage({ params }: WeeklyTasksPageProps) {
         ),
       );
       setDeleteSubTaskConfirm(null);
-      if (expandedSubTaskId === subTaskId) setExpandedSubTaskId(null);
+      setExpandedSubTaskIds((prev) => {
+        const next = new Set(prev);
+        next.delete(subTaskId);
+        return next;
+      });
     } catch (err) {
       console.error(err);
     }
@@ -470,18 +488,58 @@ export default function WeeklyTasksPage({ params }: WeeklyTasksPageProps) {
     (st.progress?.some((p) => p.isPriority && !p.isCompleted) ?? false);
 
   const toggleSubTaskExpand = (st: SubTask) => {
-    if (expandedSubTaskId === st.id) {
-      setExpandedSubTaskId(null);
+    if (expandedSubTaskIds.has(st.id)) {
+      setExpandedSubTaskIds((prev) => {
+        const next = new Set(prev);
+        next.delete(st.id);
+        return next;
+      });
       setNewProgressSubTaskId(null);
       setEditProgress(null);
       return;
     }
-    setExpandedSubTaskId(st.id);
+    setExpandedSubTaskIds((prev) => new Set(prev).add(st.id));
     setNewProgressContent("");
     setNewProgressAssignee("");
     setNewProgressPriority(false);
     setNewProgressDueDate("");
   };
+
+  const expandAll = () => {
+    const taskIds = new Set<string>();
+    const subTaskIds = new Set<string>();
+    for (const task of tasks) {
+      taskIds.add(task.id);
+      for (const st of task.subTasks ?? []) {
+        if ((st.progress ?? []).length > 0) subTaskIds.add(st.id);
+      }
+    }
+    setExpandedTaskIds(taskIds);
+    setExpandedSubTaskIds(subTaskIds);
+  };
+
+  const collapseAll = () => {
+    setExpandedTaskIds(new Set());
+    setExpandedSubTaskIds(new Set());
+    setNewSubTaskId(null);
+    setNewProgressSubTaskId(null);
+    setEditSubTask(null);
+    setEditProgress(null);
+  };
+
+  const isAllExpanded = useMemo(() => {
+    if (tasks.length === 0) return false;
+    for (const t of tasks) {
+      if (!expandedTaskIds.has(t.id)) return false;
+    }
+    for (const t of tasks) {
+      for (const st of t.subTasks ?? []) {
+        if ((st.progress ?? []).length > 0 && !expandedSubTaskIds.has(st.id))
+          return false;
+      }
+    }
+    return true;
+  }, [tasks, expandedTaskIds, expandedSubTaskIds]);
 
   const handleAddProgress = async (taskId: string, subTaskId: string) => {
     const content = newProgressContent.trim();
@@ -836,6 +894,24 @@ export default function WeeklyTasksPage({ params }: WeeklyTasksPageProps) {
             下周
           </button>
         </div>
+        <div className="flex items-center gap-4">
+          <button
+            type="button"
+            onClick={isAllExpanded ? collapseAll : expandAll}
+            className="btn-ghost rounded-lg border border-slate-200 px-2 py-1 text-xs text-slate-600 hover:bg-slate-50"
+          >
+            {isAllExpanded ? "一键收起" : "一键展开"}
+          </button>
+          <label className="flex cursor-pointer items-center gap-1.5 text-xs text-slate-600">
+            <input
+              type="checkbox"
+              checked={hideCompleted}
+              onChange={(e) => setHideCompleted(e.target.checked)}
+              className="h-3.5 w-3.5 rounded border-slate-300"
+            />
+            不展示已完成
+          </label>
+        </div>
       </div>
 
       <div className="card space-y-3 px-4 py-4">
@@ -858,13 +934,13 @@ export default function WeeklyTasksPage({ params }: WeeklyTasksPageProps) {
               <div className="h-3 w-20 skeleton rounded" />
             </div>
           </div>
-        ) : sortedTasks.length === 0 ? (
+        ) : displayTasks.length === 0 ? (
           <div className="flex flex-col items-center justify-center gap-3 py-8 text-center animate-in">
             <div className="flex h-14 w-14 items-center justify-center rounded-full bg-slate-100 text-2xl">
               📝
             </div>
             <div className="text-sm font-medium text-slate-900">
-              本周还没有任务
+              {hideCompleted ? "暂无未完成任务" : "本周还没有任务"}
             </div>
             <div className="text-xs text-slate-500">
               添加第一个任务，开始规划这一周吧
@@ -872,11 +948,11 @@ export default function WeeklyTasksPage({ params }: WeeklyTasksPageProps) {
           </div>
         ) : (
           <ul className="space-y-2">
-            {sortedTasks.map((task) => (
+            {displayTasks.map((task) => (
               <li
                 key={task.id}
                 className={`overflow-hidden rounded-lg border transition-all duration-200 ${
-                  expandedTaskId === task.id
+                  expandedTaskIds.has(task.id)
                     ? "border-primary/25 bg-white shadow-md"
                     : "border-slate-100 bg-slate-50 hover:shadow-sm"
                 }`}
@@ -887,15 +963,15 @@ export default function WeeklyTasksPage({ params }: WeeklyTasksPageProps) {
                       type="button"
                       onClick={() => toggleExpand(task)}
                       className={`flex h-6 w-6 shrink-0 items-center justify-center rounded transition-colors ${
-                        expandedTaskId === task.id
+                        expandedTaskIds.has(task.id)
                           ? "bg-primary/15 text-primary"
                           : "bg-slate-100 text-slate-500 hover:bg-slate-200 hover:text-slate-700"
                       }`}
-                      title={expandedTaskId === task.id ? "收起" : "展开"}
+                      title={expandedTaskIds.has(task.id) ? "收起" : "展开"}
                     >
                       <span
                         className={`inline-block text-xs transition-transform duration-200 ${
-                          expandedTaskId === task.id ? "rotate-0" : "-rotate-90"
+                          expandedTaskIds.has(task.id) ? "rotate-0" : "-rotate-90"
                         }`}
                       >
                         ▼
@@ -990,7 +1066,7 @@ export default function WeeklyTasksPage({ params }: WeeklyTasksPageProps) {
                     </button>
                   </div>
                 </div>
-                {expandedTaskId === task.id && (
+                {expandedTaskIds.has(task.id) && (
                   <div className="animate-slide-down border-l-4 border-l-primary/40 border-t border-slate-100 bg-slate-50/50 px-3 py-3">
                     <div className="space-y-2">
                       <div className="flex items-center gap-2 text-xs font-medium text-slate-600">
@@ -999,11 +1075,13 @@ export default function WeeklyTasksPage({ params }: WeeklyTasksPageProps) {
                         <span className="h-px flex-1 bg-slate-200" />
                       </div>
                       <ul className="space-y-1.5">
-                        {sortedSubTasks(task.subTasks).map((st) => (
+                        {sortedSubTasks(task.subTasks)
+                          .filter((st) => !hideCompleted || !st.isCompleted)
+                          .map((st) => (
                           <li
                             key={st.id}
                             className={`overflow-hidden rounded-lg border transition-colors ${
-                              expandedSubTaskId === st.id
+                              expandedSubTaskIds.has(st.id)
                                 ? "border-primary/30 bg-white shadow-sm"
                                 : "border-slate-100 bg-slate-50"
                             }`}
@@ -1013,15 +1091,15 @@ export default function WeeklyTasksPage({ params }: WeeklyTasksPageProps) {
                                 type="button"
                                 onClick={() => toggleSubTaskExpand(st)}
                                 className={`flex h-5 w-5 shrink-0 items-center justify-center rounded transition-colors ${
-                                  expandedSubTaskId === st.id
+                                  expandedSubTaskIds.has(st.id)
                                     ? "bg-primary/15 text-primary"
                                     : "bg-slate-100 text-slate-400 hover:bg-slate-200 hover:text-slate-600"
                                 }`}
-                                title={expandedSubTaskId === st.id ? "收起进度" : "展开进度"}
+                                title={expandedSubTaskIds.has(st.id) ? "收起进度" : "展开进度"}
                               >
                                 <span
                                   className={`inline-block text-[10px] transition-transform duration-200 ${
-                                    expandedSubTaskId === st.id
+                                    expandedSubTaskIds.has(st.id)
                                       ? "rotate-0"
                                       : "-rotate-90"
                                   }`}
@@ -1128,7 +1206,7 @@ export default function WeeklyTasksPage({ params }: WeeklyTasksPageProps) {
                                 </button>
                               </div>
                             </div>
-                            {expandedSubTaskId === st.id && (
+                            {expandedSubTaskIds.has(st.id) && (
                               <div className="animate-slide-down border-l-2 border-l-primary/30 border-t border-slate-100 bg-slate-50/80 px-2 py-2">
                                 <div className="mb-1.5 flex items-center gap-2 text-xs font-medium text-slate-600">
                                   <span className="h-px flex-1 bg-slate-200" />
@@ -1136,7 +1214,9 @@ export default function WeeklyTasksPage({ params }: WeeklyTasksPageProps) {
                                   <span className="h-px flex-1 bg-slate-200" />
                                 </div>
                                 <ul className="space-y-1">
-                                  {sortedProgress(st.progress ?? []).map((p) => (
+                                  {sortedProgress(st.progress ?? [])
+                                    .filter((p) => !hideCompleted || !p.isCompleted)
+                                    .map((p) => (
                                     <li
                                       key={p.id}
                                       className="flex items-center gap-2 rounded border border-slate-100 bg-slate-50/80 px-2 py-1.5"
@@ -1782,7 +1862,7 @@ export default function WeeklyTasksPage({ params }: WeeklyTasksPageProps) {
         </div>
       </div>
 
-      {completedSummary.length > 0 && (
+      {completedSummary.length > 0 && !hideCompleted && (
         <div className="card overflow-hidden px-4 py-4">
           <div className="mb-3 flex items-center justify-between">
             <div className="flex items-center gap-2">
