@@ -230,14 +230,18 @@ export default function WeeklyTasksPage({ params }: WeeklyTasksPageProps) {
     }
   };
 
+  const isEffectivePriority = (st: SubTask) =>
+    st.isPriority ||
+    (st.progress?.some((p) => p.isPriority && !p.isCompleted) ?? false);
+
   const getTaskStats = (task: Task) => {
     const total = task.subTasks.length;
     const completed = task.subTasks.filter((s) => s.isCompleted).length;
     const importantPending = task.subTasks.filter(
-      (s) => s.isPriority && !s.isCompleted,
+      (s) => isEffectivePriority(s) && !s.isCompleted,
     ).length;
     const unimportantPending = task.subTasks.filter(
-      (s) => !s.isCompleted && !s.isPriority,
+      (s) => !s.isCompleted && !isEffectivePriority(s),
     ).length;
     return { total, completed, importantPending, unimportantPending };
   };
@@ -542,10 +546,6 @@ export default function WeeklyTasksPage({ params }: WeeklyTasksPageProps) {
       console.error(err);
     }
   };
-
-  const isEffectivePriority = (st: SubTask) =>
-    st.isPriority ||
-    (st.progress?.some((p) => p.isPriority && !p.isCompleted) ?? false);
 
   const toggleSubTaskExpand = (st: SubTask) => {
     if (expandedSubTaskIds.has(st.id)) {
