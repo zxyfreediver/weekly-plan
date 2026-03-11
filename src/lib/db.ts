@@ -44,6 +44,7 @@ function initDb(instance: Database.Database) {
       id TEXT PRIMARY KEY,
       sub_category_id TEXT NOT NULL,
       content TEXT NOT NULL,
+      description TEXT DEFAULT '',
       is_completed INTEGER DEFAULT 0,
       is_priority INTEGER DEFAULT 0,
       week_start DATE NOT NULL,
@@ -51,6 +52,11 @@ function initDb(instance: Database.Database) {
       updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
     );
   `);
+  try {
+    instance.exec("ALTER TABLE tasks ADD COLUMN description TEXT DEFAULT ''");
+  } catch {
+    // column may already exist
+  }
 }
 
 export function getDb() {

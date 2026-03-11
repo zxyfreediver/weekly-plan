@@ -6,6 +6,7 @@ import { use, useEffect, useMemo, useState } from "react";
 type Task = {
   id: string;
   content: string;
+  description: string;
   isCompleted: boolean;
   isPriority: boolean;
   weekStart: string;
@@ -42,6 +43,16 @@ export default function WeeklyTasksPage({ params }: WeeklyTasksPageProps) {
   const [newPriority, setNewPriority] = useState(false);
   const [categoryName, setCategoryName] = useState<string | null>(null);
   const [subCategoryName, setSubCategoryName] = useState<string | null>(null);
+  const [editTask, setEditTask] = useState<Task | null>(null);
+  const [editContent, setEditContent] = useState("");
+  const [editDescription, setEditDescription] = useState("");
+  const [editPriority, setEditPriority] = useState(false);
+  const [editSubmitting, setEditSubmitting] = useState(false);
+  const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
+  const [expandedTaskId, setExpandedTaskId] = useState<string | null>(null);
+  const [inlineContent, setInlineContent] = useState("");
+  const [inlineDescription, setInlineDescription] = useState("");
+  const [inlineSaving, setInlineSaving] = useState(false);
 
   const weekInfo = useMemo(() => getWeekInfo(weekOffset), [weekOffset]);
 
@@ -145,6 +156,101 @@ export default function WeeklyTasksPage({ params }: WeeklyTasksPageProps) {
     }
   };
 
+  const openEdit = (task: Task) => {
+    setEditTask(task);
+    setEditContent(task.content);
+    setEditDescription(task.description);
+    setEditPriority(task.isPriority);
+    setEditSubmitting(false);
+  };
+
+  const toggleExpand = (task: Task) => {
+    if (expandedTaskId === task.id) {
+      setExpandedTaskId(null);
+      return;
+    }
+    setExpandedTaskId(task.id);
+    setInlineContent(task.content);
+    setInlineDescription(task.description ?? "");
+  };
+
+  const handleInlineSave = async () => {
+    if (!expandedTaskId) return;
+    const trimmed = inlineContent.trim();
+    if (!trimmed) return;
+    setInlineSaving(true);
+    try {
+      const res = await fetch(`/api/tasks/${expandedTaskId}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          content: trimmed,
+          description: inlineDescription,
+        }),
+      });
+      if (!res.ok) return;
+      setTasks((prev) =>
+        prev.map((t) =>
+          t.id === expandedTaskId
+            ? { ...t, content: trimmed, description: inlineDescription }
+            : t,
+        ),
+      );
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setInlineSaving(false);
+    }
+  };
+
+  const handleEditTask = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editTask) return;
+    const trimmed = editContent.trim();
+    if (!trimmed) return;
+    setEditSubmitting(true);
+    try {
+      const res = await fetch(`/api/tasks/${editTask.id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          content: trimmed,
+          description: editDescription,
+          isPriority: editPriority,
+        }),
+      });
+      if (!res.ok) return;
+      setTasks((prev) =>
+        prev.map((t) =>
+          t.id === editTask.id
+            ? {
+                ...t,
+                content: trimmed,
+                description: editDescription,
+                isPriority: editPriority,
+              }
+            : t,
+        ),
+      );
+      setEditTask(null);
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setEditSubmitting(false);
+    }
+  };
+
+  const handleDeleteTask = async (taskId: string) => {
+    try {
+      const res = await fetch(`/api/tasks/${taskId}`, { method: "DELETE" });
+      if (!res.ok) return;
+      setTasks((prev) => prev.filter((t) => t.id !== taskId));
+      setDeleteConfirm(null);
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
   const handleAddTask = async () => {
     const content = newTask.trim();
     if (!content) return;
@@ -239,60 +345,225 @@ export default function WeeklyTasksPage({ params }: WeeklyTasksPageProps) {
             {sortedTasks.map((task) => (
               <li
                 key={task.id}
-                className="flex items-center justify-between rounded-lg border border-slate-100 bg-slate-50 px-3 py-2.5"
+                className="overflow-hidden rounded-lg border border-slate-100 bg-slate-50"
               >
-                <div className="flex flex-1 items-center gap-3">
-                  <button
-                    type="button"
-                    onClick={() => handleToggleCompleted(task)}
-                    className="flex h-4 w-4 items-center justify-center rounded border border-slate-300 bg-white text-[10px] text-primary"
-                  >
-                    {task.isCompleted ? "✓" : ""}
-                  </button>
-                  {task.isPriority && (
-                    <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-medium text-amber-700">
-                      高优先级
-                    </span>
-                  )}
-                  <span
-                    className={`text-sm ${
-                      task.isCompleted
-                        ? "text-slate-400 line-through"
-                        : "text-slate-900"
-                    }`}
-                  >
-                    {task.content}
-                  </span>
+                <div className="flex items-center justify-between px-3 py-2.5">
+                  <div className="flex flex-1 items-center gap-3">
+                    <button
+                      type="button"
+                      onClick={() => handleToggleCompleted(task)}
+                      className="flex h-4 w-4 shrink-0 items-center justify-center rounded border border-slate-300 bg-white text-[10px] text-primary"
+                    >
+                      {task.isCompleted ? "✓" : ""}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => toggleExpand(task)}
+                      className="min-w-0 flex-1 text-left"
+                    >
+                      <span
+                        className={`flex items-center gap-1.5 text-sm ${
+                          task.isCompleted
+                            ? "line-through text-slate-400"
+                            : "font-semibold text-slate-700"
+                        }`}
+                      >
+                        <span className="truncate">{task.content}</span>
+                        {task.isPriority && (
+                          <span className="shrink-0 rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-medium text-amber-700">
+                            高优先级
+                          </span>
+                        )}
+                      </span>
+                      {(task.description ?? "") && (
+                        <span
+                          className={`mt-0.5 block line-clamp-1 text-xs text-slate-500 ${
+                            task.isCompleted ? "line-through" : ""
+                          }`}
+                        >
+                          {task.description}
+                        </span>
+                      )}
+                      <span className="mt-0.5 block text-xs text-slate-400">
+                        {expandedTaskId === task.id ? "▲ 收起" : "▼ 展开详情"}
+                      </span>
+                    </button>
+                  </div>
+                  <div className="flex shrink-0 items-center gap-2 text-xs text-slate-400">
+                    <button
+                      type="button"
+                      onClick={() => handleTogglePriority(task)}
+                      className="rounded px-1.5 py-0.5 hover:bg-slate-100"
+                      title="切换优先级"
+                    >
+                      ⭐
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => openEdit(task)}
+                      className="rounded px-1.5 py-0.5 hover:bg-slate-100"
+                      title="编辑"
+                    >
+                      ✏️
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setDeleteConfirm(task.id)}
+                      className="rounded px-1.5 py-0.5 hover:bg-slate-100"
+                      title="删除"
+                    >
+                      🗑️
+                    </button>
+                  </div>
                 </div>
-                <div className="flex items-center gap-2 text-xs text-slate-400">
-                  <button
-                    type="button"
-                    onClick={() => handleTogglePriority(task)}
-                    className="rounded px-1.5 py-0.5 hover:bg-slate-100"
-                    title="切换优先级"
-                  >
-                    ⭐
-                  </button>
-                  <button
-                    type="button"
-                    className="rounded px-1.5 py-0.5 hover:bg-slate-100"
-                    title="编辑"
-                  >
-                    ✏️
-                  </button>
-                  <button
-                    type="button"
-                    className="rounded px-1.5 py-0.5 hover:bg-slate-100"
-                    title="删除"
-                  >
-                    🗑️
-                  </button>
-                </div>
+                {expandedTaskId === task.id && (
+                  <div className="border-t border-slate-100 bg-white px-3 py-3">
+                    <div className="space-y-3">
+                      <div>
+                        <label className="mb-1 block text-xs font-medium text-slate-500">
+                          任务内容
+                        </label>
+                        <input
+                          type="text"
+                          value={inlineContent}
+                          onChange={(e) => setInlineContent(e.target.value)}
+                          placeholder="任务内容"
+                          className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none focus:border-primary focus:ring-1 focus:ring-primary"
+                        />
+                      </div>
+                      <div>
+                        <label className="mb-1 block text-xs font-medium text-slate-500">
+                          具体描述
+                        </label>
+                        <textarea
+                          value={inlineDescription}
+                          onChange={(e) =>
+                            setInlineDescription(e.target.value)
+                          }
+                          placeholder="添加具体描述..."
+                          rows={4}
+                          className="w-full resize-none rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none focus:border-primary focus:ring-1 focus:ring-primary"
+                        />
+                      </div>
+                      <div className="flex justify-end">
+                        <button
+                          type="button"
+                          onClick={handleInlineSave}
+                          disabled={
+                            inlineSaving || !inlineContent.trim()
+                          }
+                          className="rounded-lg bg-primary px-4 py-2 text-sm font-medium text-white hover:bg-blue-600 disabled:opacity-70"
+                        >
+                          {inlineSaving ? "保存中..." : "保存"}
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                )}
               </li>
             ))}
           </ul>
         )}
       </div>
+
+      {editTask && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
+          onClick={() => !editSubmitting && setEditTask(null)}
+        >
+          <div
+            className="card w-full max-w-md p-6"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h2 className="text-lg font-semibold text-slate-900">编辑任务</h2>
+            <form onSubmit={handleEditTask} className="mt-4 space-y-4">
+              <div>
+                <label className="mb-1 block text-xs font-medium text-slate-500">
+                  任务内容
+                </label>
+                <input
+                  type="text"
+                  value={editContent}
+                  onChange={(e) => setEditContent(e.target.value)}
+                  placeholder="任务内容"
+                  className="w-full rounded-lg border border-slate-200 px-3 py-2.5 text-sm outline-none focus:border-primary focus:ring-1 focus:ring-primary"
+                  autoFocus
+                />
+              </div>
+              <div>
+                <label className="mb-1 block text-xs font-medium text-slate-500">
+                  具体描述
+                </label>
+                <textarea
+                  value={editDescription}
+                  onChange={(e) => setEditDescription(e.target.value)}
+                  placeholder="添加具体描述..."
+                  rows={3}
+                  className="w-full resize-none rounded-lg border border-slate-200 px-3 py-2.5 text-sm outline-none focus:border-primary focus:ring-1 focus:ring-primary"
+                />
+              </div>
+              <label className="flex items-center gap-2 text-sm text-slate-600">
+                <input
+                  type="checkbox"
+                  checked={editPriority}
+                  onChange={(e) => setEditPriority(e.target.checked)}
+                  className="h-3.5 w-3.5 rounded border-slate-300 text-primary"
+                />
+                高优先级
+              </label>
+              <div className="flex justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={() => !editSubmitting && setEditTask(null)}
+                  className="rounded-lg border border-slate-200 px-4 py-2 text-sm text-slate-600 hover:bg-slate-50"
+                >
+                  取消
+                </button>
+                <button
+                  type="submit"
+                  disabled={editSubmitting || !editContent.trim()}
+                  className="rounded-lg bg-primary px-4 py-2 text-sm font-medium text-white hover:bg-blue-600 disabled:opacity-70"
+                >
+                  {editSubmitting ? "保存中..." : "保存"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {deleteConfirm && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
+          onClick={() => setDeleteConfirm(null)}
+        >
+          <div
+            className="card w-full max-w-md p-6"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h2 className="text-lg font-semibold text-slate-900">删除任务</h2>
+            <p className="mt-2 text-sm text-slate-600">
+              确定要删除该任务吗？此操作不可恢复。
+            </p>
+            <div className="mt-4 flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setDeleteConfirm(null)}
+                className="rounded-lg border border-slate-200 px-4 py-2 text-sm text-slate-600 hover:bg-slate-50"
+              >
+                取消
+              </button>
+              <button
+                type="button"
+                onClick={() => handleDeleteTask(deleteConfirm)}
+                className="rounded-lg bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700"
+              >
+                删除
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       <div className="card flex flex-col gap-3 px-4 py-4">
         <div className="text-sm font-medium text-slate-800">添加任务</div>

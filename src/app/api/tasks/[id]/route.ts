@@ -4,6 +4,7 @@ import { deleteTask, updateTask } from "@/lib/services/task";
 
 const updateTaskSchema = z.object({
   content: z.string().min(1).max(500).optional(),
+  description: z.string().max(2000).optional(),
   isCompleted: z.boolean().optional(),
   isPriority: z.boolean().optional(),
 });

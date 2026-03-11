@@ -3,6 +3,7 @@ import { getDb } from "@/lib/db";
 export type Task = {
   id: string;
   content: string;
+  description: string;
   isCompleted: boolean;
   isPriority: boolean;
   weekStart: string;
@@ -18,6 +19,7 @@ export function getTasksForSubCategory(
     SELECT
       id,
       content,
+      COALESCE(description, '') AS description,
       is_completed AS isCompleted,
       is_priority AS isPriority,
       week_start AS weekStart
@@ -32,12 +34,14 @@ export function getTasksForSubCategory(
 export function createTask(input: {
   subCategoryId: string;
   content: string;
+  description?: string;
   isPriority?: boolean;
   weekStart: string;
 }): Task {
   const db = getDb();
   const id = crypto.randomUUID();
   const now = new Date().toISOString();
+  const desc = input.description ?? "";
 
   const stmt = db.prepare(
     `
@@ -45,13 +49,14 @@ export function createTask(input: {
       id,
       sub_category_id,
       content,
+      description,
       is_completed,
       is_priority,
       week_start,
       created_at,
       updated_at
     )
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
   `,
   );
 
@@ -59,6 +64,7 @@ export function createTask(input: {
     id,
     input.subCategoryId,
     input.content,
+    desc,
     0,
     input.isPriority ? 1 : 0,
     input.weekStart,
@@ -69,6 +75,7 @@ export function createTask(input: {
   return {
     id,
     content: input.content,
+    description: desc,
     isCompleted: false,
     isPriority: Boolean(input.isPriority),
     weekStart: input.weekStart,
@@ -77,7 +84,9 @@ export function createTask(input: {
 
 export function updateTask(
   id: string,
-  updates: Partial<Pick<Task, "content" | "isCompleted" | "isPriority">>,
+  updates: Partial<
+    Pick<Task, "content" | "description" | "isCompleted" | "isPriority">,
+  >,
 ): Task | null {
   const db = getDb();
 
@@ -87,6 +96,7 @@ export function updateTask(
       | {
           id: string;
           content: string;
+          description: string;
           isCompleted: number;
           isPriority: number;
           weekStart: string;
@@ -97,6 +107,7 @@ export function updateTask(
       SELECT
         id,
         content,
+        COALESCE(description, '') AS description,
         is_completed AS isCompleted,
         is_priority AS isPriority,
         week_start AS weekStart
@@ -112,6 +123,10 @@ export function updateTask(
 
   const nextContent =
     updates.content !== undefined ? updates.content : existing.content;
+  const nextDescription =
+    updates.description !== undefined
+      ? updates.description
+      : existing.description;
   const nextCompleted =
     updates.isCompleted !== undefined
       ? updates.isCompleted
@@ -126,6 +141,7 @@ export function updateTask(
     UPDATE tasks
     SET
       content = ?,
+      description = ?,
       is_completed = ?,
       is_priority = ?,
       updated_at = ?
@@ -135,6 +151,7 @@ export function updateTask(
 
   stmt.run(
     nextContent,
+    nextDescription,
     nextCompleted ? 1 : 0,
     nextPriority ? 1 : 0,
     new Date().toISOString(),
@@ -144,6 +161,7 @@ export function updateTask(
   return {
     id: existing.id,
     content: nextContent,
+    description: nextDescription,
     isCompleted: nextCompleted,
     isPriority: nextPriority,
     weekStart: existing.weekStart,
