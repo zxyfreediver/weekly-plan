@@ -18,7 +18,7 @@ graph TB
     A[Client Layer] --> B[Next.js App]
     B --> C[API Routes]
     C --> D[Services]
-    D --> E[(SQLite)]
+    D --> E[(Supabase PostgreSQL)]
 
     subgraph "Client Layer"
         A1[Web Browser]
@@ -55,15 +55,15 @@ graph TB
 
 #### Backend
 - **Runtime:** Node.js (Next.js API Routes)
-- **ORM:** better-sqlite3 或 Prisma (SQLite adapter)
+- **Database Client:** @supabase/supabase-js
 - **API Pattern:** REST
 - **Validation:** Zod
 
 #### Infrastructure
-- **Hosting:** Docker 自托管
-- **Database:** SQLite (文件存储)
-- **CI/CD:** GitHub Actions
-- **Platform:** 阿里云 ECS / 轻量应用服务器
+- **Hosting:** Vercel（推荐）
+- **Database:** Supabase (PostgreSQL)
+- **CI/CD:** Vercel 自动部署
+- **备选:** Docker 自托管（阿里云 ECS）
 
 #### Authentication
 - **方案选项:**
@@ -103,9 +103,11 @@ src/
 │   ├── TaskItem/
 │   └── WeekSelector/
 ├── lib/
-│   ├── db.ts                    # SQLite 连接
+│   ├── supabase.ts             # Supabase 客户端
 │   ├── auth.ts
-│   └── utils.ts
+│   └── services/
+│       ├── category.ts
+│       └── task.ts
 ├── types/
 └── styles/
 ```
@@ -178,11 +180,12 @@ CREATE TABLE tasks (
     id TEXT PRIMARY KEY,
     sub_category_id TEXT NOT NULL REFERENCES sub_categories(id) ON DELETE CASCADE,
     content TEXT NOT NULL,
-    is_completed INTEGER DEFAULT 0,
-    is_priority INTEGER DEFAULT 0,
+    description TEXT DEFAULT '',  -- 任务详细描述
+    is_completed BOOLEAN DEFAULT FALSE,
+    is_priority BOOLEAN DEFAULT FALSE,
     week_start DATE NOT NULL,     -- 所属周的周一日期
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
 -- 简单统计 (可选，也可实时计算)
@@ -349,7 +352,17 @@ module.exports = withPWA({
 
 ---
 
-## Docker 部署
+## Vercel + Supabase 部署（推荐）
+
+详见 `docs/DEPLOY-VERCEL-SUPABASE.md`。
+
+- 将代码推送到 GitHub，在 Vercel 导入项目
+- 在 Supabase 创建项目并执行 `supabase/migrations/001_initial.sql`
+- 配置环境变量：`AUTH_USERNAME`、`AUTH_PASSWORD`、`NEXT_PUBLIC_SUPABASE_URL`、`SUPABASE_SERVICE_ROLE_KEY`
+
+---
+
+## Docker 部署（备选）
 
 ### Dockerfile
 
@@ -438,7 +451,7 @@ jobs:
 ## Performance Optimization
 
 - **静态资源:** Next.js 自动优化
-- **数据库:** SQLite 轻量，索引已设计
+- **数据库:** Supabase 索引已设计，按需优化查询
 - **缓存:** 可对分类列表等做短期 cache（可选）
 
 ---
@@ -478,7 +491,7 @@ jobs:
 
 | 风险         | 概率 | 影响 | 缓解措施                 |
 |--------------|------|------|--------------------------|
-| SQLite 并发  | 低   | 中   | 个人使用，写操作少       |
+| Supabase 连接 | 低   | 中   | 服务端连接池，按需扩展   |
 | PWA 兼容性   | 中   | 低   | 降级为普通 Web           |
 | 部署复杂度   | 中   | 中   | 文档化部署步骤           |
 
@@ -487,12 +500,12 @@ jobs:
 ## Migration & Scaling Path
 
 ### Phase 1: MVP (当前)
-- SQLite + 单机 Docker
+- Supabase (PostgreSQL) + Vercel
 - 个人 + 少量分享用户
 
 ### Phase 2: 用户增长
-- 考虑 PostgreSQL 迁移
 - 增加 Redis 缓存（如需要）
+- 优化 Supabase 查询
 
 ### Phase 3: 团队版 (未来)
 - 多租户
@@ -510,12 +523,13 @@ jobs:
 
 ## Documentation Requirements
 
-- [ ] README: 项目说明、本地运行、部署步骤
+- [x] README: 项目说明、本地运行、部署步骤
+- [x] 部署指南: `docs/DEPLOY-VERCEL-SUPABASE.md`（Vercel + Supabase）
 - [ ] API 文档: 各接口说明（可内联注释）
-- [ ] 部署 runbook: Docker 构建、环境变量、数据备份
+- [ ] 部署 runbook: Docker 构建（备选）
 
 ---
 
-*Version: 1.0*
-*Last Updated: 2025-03-10*
+*Version: 1.1*
+*Last Updated: 2025-03-11*
 *Next Review: 2025-04-10*

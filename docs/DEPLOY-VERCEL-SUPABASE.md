@@ -39,3 +39,26 @@ cp .env.example .env.local
 pnpm install
 pnpm dev
 ```
+
+## 5. 故障排查
+
+### 创建分类无报错但未创建成功
+
+- **原因**：未执行建表 SQL，或 Supabase 返回错误但未检查
+- **处理**：在 Supabase SQL Editor 执行 `supabase/migrations/001_initial.sql`，确保表已创建
+
+### ENOTFOUND / getaddrinfo 解析失败
+
+- **Vercel 部署**：
+  - 检查 Supabase 项目是否被**暂停**（免费版 7 天无活动会暂停）→ Dashboard 中 Restore project
+  - 确认 `NEXT_PUBLIC_SUPABASE_URL` 无多余空格、无末尾斜杠、与 Dashboard 完全一致
+  - 修改环境变量后需 **Redeploy** 才能生效
+- **本地开发**：国内网络可能无法直连 Supabase，可尝试 VPN 或直接部署到 Vercel 测试
+
+### 构建失败：useSearchParams 需 Suspense
+
+- 已修复：登录页 `useSearchParams()` 已用 `<Suspense>` 包裹
+
+### 构建失败：Missing Supabase env
+
+- 确保 Vercel 环境变量中已添加 `NEXT_PUBLIC_SUPABASE_URL` 和 `SUPABASE_SERVICE_ROLE_KEY`

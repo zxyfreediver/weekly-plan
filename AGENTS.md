@@ -4,8 +4,8 @@
 
 **App:** 周记清单（Weekly Journal Checklist）
 **Goal:** 个人周度任务管理 + AI 总结，帮助职场人按周记录、分类、完成待办
-**Stack:** Next.js 14 + Tailwind CSS + SQLite + Docker + PWA
-**Current Phase:** Phase 1 — Foundation
+**Stack:** Next.js 16 + Tailwind CSS + Supabase + Vercel + PWA
+**Current Phase:** Phase 2 — Core Features 已完成，部署 Vercel+Supabase
 
 ## How I Should Think
 
@@ -56,35 +56,37 @@
 
 ## Current State (Update This!)
 
-**Last Updated:** 2025-03-10
-**Working On:** 项目初始化
-**Recently Completed:** 文档准备（PRD、Tech Design、AGENTS）
+**Last Updated:** 2025-03-11
+**Working On:** 文档完善
+**Recently Completed:** Vercel+Supabase 迁移、任务描述与展开、UI 优化、部署文档
 **Blocked By:** None
 
 ## Roadmap
 
-### Phase 1: Foundation
-- [ ] 初始化 Next.js 项目
-- [ ] 配置 Tailwind CSS
-- [ ] 初始化 SQLite 数据库与 schema
-- [ ] 配置 NextAuth 认证
-- [ ] 配置 Pre-commit hooks
+### Phase 1: Foundation ✅
+- [x] 初始化 Next.js 项目
+- [x] 配置 Tailwind CSS
+- [x] Supabase 数据库与 schema
+- [x] 自建 Cookie 认证
+- [x] PWA 配置
 
-### Phase 2: Core Features
-- [ ] 多级分类（大分类 + 子分类）
-- [ ] 周度任务列表（增删改、划掉完成）
-- [ ] 任务优先级（高亮）
+### Phase 2: Core Features ✅
+- [x] 多级分类（大分类 + 子分类）
+- [x] 周度任务列表（增删改、划掉完成）
+- [x] 任务优先级（高亮）
+- [x] 任务描述（2 行预览 + 展开编辑）
 - [ ] 未完成自动同步到本周
 
 ### Phase 3: Enhancement
-- [ ] AI 总结接口预留
-- [ ] 按年新建工作区（子分类）
+- [x] AI 总结页预留
+- [x] 按年新建工作区（子分类）
+- [ ] AI 总结接入
 - [ ] 简单统计
 
-### Phase 4: Polish + Deploy
-- [ ] PWA 配置
-- [ ] Docker 部署配置
-- [ ] GitHub Actions CI/CD
+### Phase 4: Polish + Deploy ✅
+- [x] PWA 配置
+- [x] Vercel + Supabase 部署
+- [ ] Docker 备选部署
 
 ## What NOT To Do
 

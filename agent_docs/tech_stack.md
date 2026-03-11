@@ -4,16 +4,16 @@
 
 | 层级 | 技术 | 版本/说明 |
 |------|------|----------|
-| Frontend | Next.js | 14+ (App Router) |
+| Frontend | Next.js | 16+ (App Router) |
 | Styling | Tailwind CSS | 3.x |
-| State | React Server Components + useState/Context | - |
+| State | React Server Components + useState | - |
 | Backend | Next.js API Routes | - |
-| Database | SQLite | better-sqlite3 或 Prisma |
-| Auth | NextAuth.js | credentials + JWT |
+| Database | Supabase | PostgreSQL，@supabase/supabase-js |
+| Auth | 自建 Cookie Session | AUTH_USERNAME / AUTH_PASSWORD |
 | Validation | Zod | - |
-| PWA | @ducanh2912/next-pwa | - |
-| Deploy | Docker | 阿里云 |
-| CI/CD | GitHub Actions | - |
+| PWA | Serwist | 9.5.x |
+| Deploy | Vercel | 推荐 |
+| CI/CD | Vercel 自动部署 | - |
 
 ## 项目结构
 
@@ -27,22 +27,17 @@ src/
 │   ├── [categoryId]/[subCategoryId]/page.tsx
 │   ├── [categoryId]/[subCategoryId]/summary/page.tsx
 │   └── api/
-│       ├── auth/[...nextauth]/route.ts
+│       ├── auth/login, logout
 │       ├── categories/
-│       ├── tasks/
-│       ├── tasks/sync/
-│       ├── summary/
-│       └── stats/
+│       ├── sub-categories/
+│       └── tasks/
 ├── components/
-│   ├── ui/
-│   ├── CategoryList/
-│   ├── TaskList/
-│   ├── TaskItem/
-│   └── WeekSelector/
 ├── lib/
-│   ├── db.ts
+│   ├── supabase.ts      # Supabase 客户端
 │   ├── auth.ts
-│   └── utils.ts
+│   └── services/
+│       ├── category.ts
+│       └── task.ts
 └── types/
 ```
 
@@ -50,13 +45,12 @@ src/
 
 ```json
 {
-  "next": "^14.x",
-  "react": "^18.x",
+  "next": "^16.x",
+  "react": "^19.x",
   "tailwindcss": "^3.x",
-  "next-auth": "^4.x",
-  "better-sqlite3": "^9.x",
-  "zod": "^3.x",
-  "@ducanh2912/next-pwa": "^5.x"
+  "@supabase/supabase-js": "^2.x",
+  "zod": "^4.x",
+  "serwist": "^9.5.x"
 }
 ```
 
