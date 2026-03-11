@@ -17,16 +17,16 @@
 
 1. 将代码推送到 GitHub
 2. 在 [vercel.com](https://vercel.com) 导入项目
-3. 在项目 **Settings** → **Environment Variables** 中添加：
+3. **重要**：在项目 **Settings** → **Environment Variables** 中添加以下变量（否则构建会失败）：
 
-| 变量名 | 值 |
-|-------|-----|
-| `AUTH_USERNAME` | 你的登录账号 |
-| `AUTH_PASSWORD` | 你的登录密码 |
-| `NEXT_PUBLIC_SUPABASE_URL` | Supabase Project URL |
-| `SUPABASE_SERVICE_ROLE_KEY` | Supabase service_role key |
+| 变量名 | 值 | 说明 |
+|-------|-----|------|
+| `AUTH_USERNAME` | 你的登录账号 | |
+| `AUTH_PASSWORD` | 你的登录密码 | |
+| `NEXT_PUBLIC_SUPABASE_URL` | `https://xxx.supabase.co` | Supabase Settings → API 中的 Project URL |
+| `SUPABASE_SERVICE_ROLE_KEY` | `sb_secret_...` | Supabase Settings → API 中的 Secret keys |
 
-4. 重新部署
+4. 保存后**重新部署**（Redeploy）
 
 ## 4. 本地开发
 
