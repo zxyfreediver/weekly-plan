@@ -1,0 +1,7 @@
+# GitHub 仓库描述建议（复制到 Settings → General → Description）
+
+周记清单：个人周度任务管理工具，支持周报、月报、年报 AI 智能总结。按周组织待办清单，一键生成周报月报。Next.js + Supabase + Vercel + PWA
+
+# GitHub Topics 建议（在仓库页添加 Topics）
+
+weekly-plan, 周记, 清单, 周报, 月报, 年报, 智能总结, ai-summary, task-management, nextjs, supabase, vercel, pwa
