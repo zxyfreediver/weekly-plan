@@ -299,6 +299,24 @@ export default function WeeklyTasksPage({ params }: WeeklyTasksPageProps) {
     st.isPriority ||
     (st.progress?.some((p) => p.isPriority && !p.isCompleted) ?? false);
 
+  const isEffectiveDueDateUrgent = (st: SubTask) =>
+    (!st.isCompleted && getDueDateStatus(st.dueDate ?? null) === "urgent") ||
+    (st.progress?.some(
+      (p) => !p.isCompleted && getDueDateStatus(p.dueDate) === "urgent",
+    ) ?? false);
+
+  const isEffectiveDueDateOverdue = (st: SubTask) =>
+    (!st.isCompleted && getDueDateStatus(st.dueDate ?? null) === "overdue") ||
+    (st.progress?.some(
+      (p) => !p.isCompleted && getDueDateStatus(p.dueDate) === "overdue",
+    ) ?? false);
+
+  const hasTaskDueDateUrgent = (task: Task) =>
+    task.subTasks.some((s) => isEffectiveDueDateUrgent(s));
+
+  const hasTaskDueDateOverdue = (task: Task) =>
+    task.subTasks.some((s) => isEffectiveDueDateOverdue(s));
+
   const getTaskStats = (task: Task) => {
     const total = task.subTasks.length;
     const completed = task.subTasks.filter((s) => s.isCompleted).length;
@@ -1227,6 +1245,17 @@ export default function WeeklyTasksPage({ params }: WeeklyTasksPageProps) {
                                   {importantPending} 高优先级未完成
                                 </span>
                               )}
+                              {hasTaskDueDateOverdue(task) && (
+                                <span className="inline-flex items-center rounded-full bg-red-100 px-2 py-0.5 text-[11px] font-medium text-red-700">
+                                  逾期
+                                </span>
+                              )}
+                              {hasTaskDueDateUrgent(task) &&
+                                !hasTaskDueDateOverdue(task) && (
+                                  <span className="inline-flex items-center rounded-full bg-orange-100 px-2 py-0.5 text-[11px] font-medium text-orange-700">
+                                    临期
+                                  </span>
+                                )}
                               {unimportantPending > 0 && (
                                 <span>{unimportantPending} 普通未完成</span>
                               )}
@@ -1326,18 +1355,15 @@ export default function WeeklyTasksPage({ params }: WeeklyTasksPageProps) {
                                       高优先级
                                     </span>
                                   ) : null}
-                                  {!st.isCompleted &&
-                                    getDueDateStatus(st.dueDate ?? null) ===
-                                      "urgent" && (
+                                  {isEffectiveDueDateOverdue(st) && (
+                                    <span className="ml-1.5 shrink-0 rounded-full bg-red-100 px-1.5 py-0.5 text-[10px] font-medium text-red-700">
+                                      逾期
+                                    </span>
+                                  )}
+                                  {isEffectiveDueDateUrgent(st) &&
+                                    !isEffectiveDueDateOverdue(st) && (
                                       <span className="ml-1.5 shrink-0 rounded-full bg-orange-100 px-1.5 py-0.5 text-[10px] font-medium text-orange-700">
                                         临期
-                                      </span>
-                                    )}
-                                  {!st.isCompleted &&
-                                    getDueDateStatus(st.dueDate ?? null) ===
-                                      "overdue" && (
-                                      <span className="ml-1.5 shrink-0 rounded-full bg-red-100 px-1.5 py-0.5 text-[10px] font-medium text-red-700">
-                                        已逾期
                                       </span>
                                     )}
                                 </span>
@@ -1449,7 +1475,7 @@ export default function WeeklyTasksPage({ params }: WeeklyTasksPageProps) {
                                           {!p.isCompleted &&
                                             getDueDateStatus(p.dueDate) === "overdue" && (
                                               <span className="ml-1 rounded-full bg-red-100 px-1 py-0.5 text-[10px] font-medium text-red-700">
-                                                已逾期
+                                                逾期
                                               </span>
                                             )}
                                         </span>
