@@ -8,6 +8,9 @@ const updateSubTaskSchema = z.object({
   assignee: z.string().max(100).optional(),
   isCompleted: z.boolean().optional(),
   isPriority: z.boolean().optional(),
+  dueDate: z
+    .union([z.string().regex(/^\d{4}-\d{2}-\d{2}$/), z.literal(""), z.null()])
+    .optional(),
 });
 
 export async function PUT(

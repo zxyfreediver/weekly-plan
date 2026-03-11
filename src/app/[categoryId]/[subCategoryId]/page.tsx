@@ -12,6 +12,7 @@ type SubTask = {
   isCompleted: boolean;
   isPriority: boolean;
   sortOrder: number;
+  dueDate: string | null;
 };
 
 type Task = {
@@ -64,12 +65,33 @@ export default function WeeklyTasksPage({ params }: WeeklyTasksPageProps) {
   const [newSubTaskDesc, setNewSubTaskDesc] = useState("");
   const [newSubTaskAssignee, setNewSubTaskAssignee] = useState("");
   const [newSubTaskPriority, setNewSubTaskPriority] = useState(false);
+  const [newSubTaskDueDate, setNewSubTaskDueDate] = useState("");
   const [editSubTask, setEditSubTask] = useState<SubTask | null>(null);
   const [editSubTaskContent, setEditSubTaskContent] = useState("");
   const [editSubTaskDesc, setEditSubTaskDesc] = useState("");
   const [editSubTaskAssignee, setEditSubTaskAssignee] = useState("");
   const [editSubTaskPriority, setEditSubTaskPriority] = useState(false);
+  const [editSubTaskDueDate, setEditSubTaskDueDate] = useState("");
   const [deleteSubTaskConfirm, setDeleteSubTaskConfirm] = useState<string | null>(null);
+
+  const getDueDateStatus = (dueDate: string | null) => {
+    if (!dueDate) return null;
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const due = new Date(dueDate);
+    due.setHours(0, 0, 0, 0);
+    const diffMs = due.getTime() - today.getTime();
+    const diffDays = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
+    if (diffDays < 0) return "overdue";
+    if (diffDays <= 3) return "urgent";
+    return null;
+  };
+
+  const formatDueDate = (dueDate: string | null) => {
+    if (!dueDate) return "";
+    const [y, m, d] = dueDate.split("-").map(Number);
+    return `${y}年${m}月${d}日`;
+  };
 
   const weekInfo = useMemo(() => getWeekInfo(weekOffset), [weekOffset]);
 
@@ -119,9 +141,27 @@ export default function WeeklyTasksPage({ params }: WeeklyTasksPageProps) {
     return () => controller.abort();
   }, [categoryId, subCategoryId, weekInfo.start]);
 
+  const getTaskStats = (task: Task) => {
+    const total = task.subTasks.length;
+    const completed = task.subTasks.filter((s) => s.isCompleted).length;
+    const importantPending = task.subTasks.filter(
+      (s) => s.isPriority && !s.isCompleted,
+    ).length;
+    const unimportantPending = task.subTasks.filter(
+      (s) => !s.isCompleted && !s.isPriority,
+    ).length;
+    return { total, completed, importantPending, unimportantPending };
+  };
+
   const sortedTasks = useMemo(() => {
     const copy = [...tasks];
-    copy.sort((a, b) => (a.isCompleted === b.isCompleted ? 0 : a.isCompleted ? 1 : -1));
+    copy.sort((a, b) => {
+      const ap = getTaskStats(a).importantPending;
+      const bp = getTaskStats(b).importantPending;
+      if (ap !== bp) return bp - ap; // 高优先级未完成多的排前面
+      if (a.isCompleted !== b.isCompleted) return a.isCompleted ? 1 : -1; // 未完成排前面
+      return 0;
+    });
     return copy;
   }, [tasks]);
 
@@ -162,18 +202,7 @@ export default function WeeklyTasksPage({ params }: WeeklyTasksPageProps) {
     setNewSubTaskDesc("");
     setNewSubTaskAssignee("");
     setNewSubTaskPriority(false);
-  };
-
-  const getTaskStats = (task: Task) => {
-    const total = task.subTasks.length;
-    const completed = task.subTasks.filter((s) => s.isCompleted).length;
-    const importantPending = task.subTasks.filter(
-      (s) => s.isPriority && !s.isCompleted,
-    ).length;
-    const unimportantPending = task.subTasks.filter(
-      (s) => !s.isCompleted && !s.isPriority,
-    ).length;
-    return { total, completed, importantPending, unimportantPending };
+    setNewSubTaskDueDate("");
   };
 
   const handleEditTask = async (e: React.FormEvent) => {
@@ -253,6 +282,7 @@ export default function WeeklyTasksPage({ params }: WeeklyTasksPageProps) {
           description: newSubTaskDesc,
           assignee: newSubTaskAssignee.trim(),
           isPriority: newSubTaskPriority,
+          dueDate: newSubTaskDueDate.trim() || null,
         }),
       });
       if (!res.ok) return;
@@ -330,6 +360,7 @@ export default function WeeklyTasksPage({ params }: WeeklyTasksPageProps) {
     setEditSubTaskDesc(st.description);
     setEditSubTaskAssignee(st.assignee);
     setEditSubTaskPriority(st.isPriority);
+    setEditSubTaskDueDate(st.dueDate ?? "");
   };
 
   const handleEditSubTask = async (e: React.FormEvent) => {
@@ -362,6 +393,7 @@ export default function WeeklyTasksPage({ params }: WeeklyTasksPageProps) {
                         description: editSubTaskDesc,
                         assignee: editSubTaskAssignee.trim(),
                         isPriority: editSubTaskPriority,
+                        dueDate: editSubTaskDueDate.trim() || null,
                       }
                     : s,
                 ),
@@ -626,8 +658,24 @@ export default function WeeklyTasksPage({ params }: WeeklyTasksPageProps) {
                                       高优先级
                                     </span>
                                   ) : null}
+                                  {!st.isCompleted &&
+                                    getDueDateStatus(st.dueDate ?? null) ===
+                                      "urgent" && (
+                                      <span className="ml-1.5 shrink-0 rounded-full bg-orange-100 px-1.5 py-0.5 text-[10px] font-medium text-orange-700">
+                                        临期
+                                      </span>
+                                    )}
+                                  {!st.isCompleted &&
+                                    getDueDateStatus(st.dueDate ?? null) ===
+                                      "overdue" && (
+                                      <span className="ml-1.5 shrink-0 rounded-full bg-red-100 px-1.5 py-0.5 text-[10px] font-medium text-red-700">
+                                        已逾期
+                                      </span>
+                                    )}
                                 </span>
-                                {(st.description || st.assignee) && (
+                                {(st.description ||
+                                  st.assignee ||
+                                  (st.dueDate ?? "")) && (
                                   <div className="mt-0.5 flex flex-wrap gap-x-2 text-xs text-slate-500">
                                     {st.description && (
                                       <span className="line-clamp-1">
@@ -637,6 +685,11 @@ export default function WeeklyTasksPage({ params }: WeeklyTasksPageProps) {
                                     {st.assignee && (
                                       <span className="text-slate-600">
                                         对接人: {st.assignee}
+                                      </span>
+                                    )}
+                                    {st.dueDate && (
+                                      <span className="text-slate-500">
+                                        截止: {formatDueDate(st.dueDate)}
                                       </span>
                                     )}
                                   </div>
@@ -704,6 +757,19 @@ export default function WeeklyTasksPage({ params }: WeeklyTasksPageProps) {
                               rows={2}
                               className="w-full resize-none rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none focus:border-primary focus:ring-1 focus:ring-primary"
                             />
+                            <div>
+                              <label className="mb-1 block text-xs text-slate-500">
+                                截止日期（选填）
+                              </label>
+                              <input
+                                type="date"
+                                value={newSubTaskDueDate}
+                                onChange={(e) =>
+                                  setNewSubTaskDueDate(e.target.value)
+                                }
+                                className="input-base"
+                              />
+                            </div>
                             <div className="flex items-center justify-between">
                               <label className="flex items-center gap-1.5 text-xs text-slate-600">
                                 <input
@@ -725,6 +791,7 @@ export default function WeeklyTasksPage({ params }: WeeklyTasksPageProps) {
                                     setNewSubTaskDesc("");
                                     setNewSubTaskAssignee("");
                                     setNewSubTaskPriority(false);
+                                    setNewSubTaskDueDate("");
                                   }}
                                   className="rounded border border-slate-200 px-2 py-1 text-xs text-slate-600 hover:bg-slate-100"
                                 >
@@ -825,11 +892,11 @@ export default function WeeklyTasksPage({ params }: WeeklyTasksPageProps) {
 
       {editSubTask && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 animate-fade-in"
           onClick={() => setEditSubTask(null)}
         >
           <div
-            className="card w-full max-w-md p-6"
+            className="card w-full max-w-md p-6 animate-scale-in"
             onClick={(e) => e.stopPropagation()}
           >
             <h2 className="text-lg font-semibold text-slate-900">编辑子任务</h2>
@@ -869,6 +936,17 @@ export default function WeeklyTasksPage({ params }: WeeklyTasksPageProps) {
                   placeholder="添加描述..."
                   rows={3}
                   className="w-full resize-none rounded-lg border border-slate-200 px-3 py-2.5 text-sm outline-none focus:border-primary focus:ring-1 focus:ring-primary"
+                />
+              </div>
+              <div>
+                <label className="mb-1 block text-xs font-medium text-slate-500">
+                  截止日期（选填）
+                </label>
+                <input
+                  type="date"
+                  value={editSubTaskDueDate}
+                  onChange={(e) => setEditSubTaskDueDate(e.target.value)}
+                  className="input-base"
                 />
               </div>
               <label className="flex items-center gap-2 text-sm text-slate-600">

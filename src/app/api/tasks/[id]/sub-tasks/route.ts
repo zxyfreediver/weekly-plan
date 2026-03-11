@@ -7,6 +7,9 @@ const createSubTaskSchema = z.object({
   description: z.string().max(2000).optional(),
   assignee: z.string().max(100).optional(),
   isPriority: z.boolean().optional(),
+  dueDate: z
+    .union([z.string().regex(/^\d{4}-\d{2}-\d{2}$/), z.literal(""), z.null()])
+    .optional(),
 });
 
 export async function POST(
@@ -23,6 +26,7 @@ export async function POST(
       description: body.description,
       assignee: body.assignee,
       isPriority: body.isPriority,
+      dueDate: body.dueDate ?? undefined,
     });
     return NextResponse.json(subTask);
   } catch (error) {

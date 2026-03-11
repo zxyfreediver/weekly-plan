@@ -9,12 +9,13 @@ export type SubTask = {
   isCompleted: boolean;
   isPriority: boolean;
   sortOrder: number;
+  dueDate: string | null;
 };
 
 export async function getSubTasksByTaskId(taskId: string): Promise<SubTask[]> {
   const { data } = await supabase
     .from("sub_tasks")
-    .select("id, task_id, content, description, assignee, is_completed, is_priority, sort_order")
+    .select("id, task_id, content, description, assignee, is_completed, is_priority, sort_order, due_date")
     .eq("task_id", taskId)
     .order("sort_order")
     .order("is_completed")
@@ -30,6 +31,7 @@ export async function getSubTasksByTaskId(taskId: string): Promise<SubTask[]> {
     isCompleted: Boolean(r.is_completed),
     isPriority: Boolean(r.is_priority),
     sortOrder: r.sort_order ?? 0,
+    dueDate: r.due_date ?? null,
   }));
 }
 
@@ -39,6 +41,7 @@ export async function createSubTask(input: {
   description?: string;
   assignee?: string;
   isPriority?: boolean;
+  dueDate?: string | null;
 }): Promise<SubTask> {
   const id = crypto.randomUUID();
 
@@ -52,6 +55,8 @@ export async function createSubTask(input: {
 
   const sortOrder = (maxRow?.sort_order ?? 0) + 1;
 
+  const dueDate = input.dueDate?.trim() || null;
+
   const { error } = await supabase.from("sub_tasks").insert({
     id,
     task_id: input.taskId,
@@ -61,6 +66,7 @@ export async function createSubTask(input: {
     is_completed: false,
     is_priority: Boolean(input.isPriority),
     sort_order: sortOrder,
+    due_date: dueDate,
   });
 
   if (error) throw error;
@@ -74,18 +80,19 @@ export async function createSubTask(input: {
     isCompleted: false,
     isPriority: Boolean(input.isPriority),
     sortOrder,
+    dueDate,
   };
 }
 
 export async function updateSubTask(
   id: string,
   updates: Partial<
-    Pick<SubTask, "content" | "description" | "assignee" | "isCompleted" | "isPriority">
+    Pick<SubTask, "content" | "description" | "assignee" | "isCompleted" | "isPriority" | "dueDate">
   >,
 ): Promise<SubTask | null> {
   const { data: existing } = await supabase
     .from("sub_tasks")
-    .select("id, task_id, content, description, assignee, is_completed, is_priority, sort_order")
+    .select("id, task_id, content, description, assignee, is_completed, is_priority, sort_order, due_date")
     .eq("id", id)
     .single();
 
@@ -96,6 +103,10 @@ export async function updateSubTask(
   const nextAssignee = updates.assignee ?? existing.assignee ?? "";
   const nextCompleted = updates.isCompleted ?? Boolean(existing.is_completed);
   const nextPriority = updates.isPriority ?? Boolean(existing.is_priority);
+  const nextDueDate =
+    updates.dueDate !== undefined
+      ? (updates.dueDate?.trim() || null)
+      : (existing.due_date ?? null);
 
   const { error } = await supabase
     .from("sub_tasks")
@@ -105,6 +116,7 @@ export async function updateSubTask(
       assignee: nextAssignee,
       is_completed: nextCompleted,
       is_priority: nextPriority,
+      due_date: nextDueDate,
       updated_at: new Date().toISOString(),
     })
     .eq("id", id);
@@ -120,6 +132,7 @@ export async function updateSubTask(
     isCompleted: nextCompleted,
     isPriority: nextPriority,
     sortOrder: existing.sort_order ?? 0,
+    dueDate: nextDueDate,
   };
 }
 
