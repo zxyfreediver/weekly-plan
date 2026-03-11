@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { getCategorySubCategories } from "@/lib/services/category";
-import { getDb } from "@/lib/db";
+import { supabase } from "@/lib/supabase";
 import { getCurrentUser } from "@/lib/auth";
 
 const updateCategorySchema = z.object({
@@ -17,7 +17,7 @@ export async function GET(
   if (!userId) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
-  const data = getCategorySubCategories(id, userId);
+  const data = await getCategorySubCategories(id, userId);
   if (!data) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
@@ -37,16 +37,13 @@ export async function PUT(
     const json = await request.json();
     const body = updateCategorySchema.parse(json);
 
-    const db = getDb();
-    const stmt = db.prepare(
-      `
-      UPDATE categories
-      SET name = ?, updated_at = ?
-      WHERE id = ? AND user_id = ?
-    `,
-    );
-    stmt.run(body.name, new Date().toISOString(), id, userId);
+    const { error } = await supabase
+      .from("categories")
+      .update({ name: body.name, updated_at: new Date().toISOString() })
+      .eq("id", id)
+      .eq("user_id", userId);
 
+    if (error) throw error;
     return NextResponse.json({ id, name: body.name });
   } catch (error) {
     console.error(error);
@@ -70,9 +67,13 @@ export async function DELETE(
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
   try {
-    const db = getDb();
-    const stmt = db.prepare("DELETE FROM categories WHERE id = ? AND user_id = ?");
-    stmt.run(id, userId);
+    const { error } = await supabase
+      .from("categories")
+      .delete()
+      .eq("id", id)
+      .eq("user_id", userId);
+
+    if (error) throw error;
     return NextResponse.json({ ok: true });
   } catch (error) {
     console.error(error);

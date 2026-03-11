@@ -13,7 +13,7 @@ export default async function CategoryPage({ params }: CategoryPageProps) {
   if (!userId) {
     redirect("/login");
   }
-  const data = getCategorySubCategories(categoryId, userId);
+  const data = await getCategorySubCategories(categoryId, userId);
 
   if (!data) {
     return notFound();

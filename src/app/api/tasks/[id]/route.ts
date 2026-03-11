@@ -17,7 +17,7 @@ export async function PUT(
   try {
     const json = await request.json();
     const body = updateTaskSchema.parse(json);
-    const task = updateTask(id, body);
+    const task = await updateTask(id, body);
     if (!task) {
       return NextResponse.json({ error: "Not found" }, { status: 404 });
     }
@@ -40,7 +40,7 @@ export async function DELETE(
 ) {
   const { id } = await params;
   try {
-    deleteTask(id);
+    await deleteTask(id);
     return NextResponse.json({ ok: true });
   } catch (error) {
     console.error(error);

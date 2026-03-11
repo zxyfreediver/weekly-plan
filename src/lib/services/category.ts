@@ -1,4 +1,4 @@
-import { getDb } from "@/lib/db";
+import { supabase } from "@/lib/supabase";
 
 export type CategoryWithStats = {
   id: string;
@@ -13,65 +13,85 @@ export type SubCategory = {
   pendingCount: number;
 };
 
-export function getCategoriesWithStats(userId: string): CategoryWithStats[] {
-  const db = getDb();
-  const stmt = db.prepare<unknown, CategoryWithStats>(
-    `
-    SELECT
-      c.id,
-      c.name,
-      COALESCE(COUNT(t.id), 0) AS taskCount,
-      COALESCE(SUM(CASE WHEN t.is_completed = 1 THEN 1 ELSE 0 END), 0) AS completedCount
-    FROM categories c
-    LEFT JOIN sub_categories sc ON sc.category_id = c.id
-    LEFT JOIN tasks t ON t.sub_category_id = sc.id
-    WHERE c.user_id = ?
-    GROUP BY c.id, c.name
-    ORDER BY c.sort_order, c.created_at
-  `,
-  );
+export async function getCategoriesWithStats(
+  userId: string,
+): Promise<CategoryWithStats[]> {
+  const { data: categories } = await supabase
+    .from("categories")
+    .select("id, name")
+    .eq("user_id", userId)
+    .order("sort_order")
+    .order("created_at");
 
-  return stmt.all(userId);
+  if (!categories?.length) return [];
+
+  const result: CategoryWithStats[] = [];
+  for (const c of categories) {
+    const { data: subs } = await supabase
+      .from("sub_categories")
+      .select("id")
+      .eq("category_id", c.id);
+    const subIds = (subs ?? []).map((s) => s.id);
+    if (subIds.length === 0) {
+      result.push({
+        id: c.id,
+        name: c.name,
+        taskCount: 0,
+        completedCount: 0,
+      });
+      continue;
+    }
+    const { data: tasks } = await supabase
+      .from("tasks")
+      .select("id, is_completed")
+      .in("sub_category_id", subIds);
+    const taskCount = tasks?.length ?? 0;
+    const completedCount =
+      tasks?.filter((t) => t.is_completed).length ?? 0;
+    result.push({
+      id: c.id,
+      name: c.name,
+      taskCount,
+      completedCount,
+    });
+  }
+  return result;
 }
 
-export function getCategorySubCategories(
+export async function getCategorySubCategories(
   categoryId: string,
   userId: string,
-): { id: string; name: string; subCategories: SubCategory[] } | null {
-  const db = getDb();
+): Promise<{ id: string; name: string; subCategories: SubCategory[] } | null> {
+  const { data: category } = await supabase
+    .from("categories")
+    .select("id, name")
+    .eq("id", categoryId)
+    .eq("user_id", userId)
+    .single();
 
-  const categoryStmt = db.prepare<
-    unknown,
-    { id: string; name: string } | undefined
-  >(
-    `
-    SELECT id, name
-    FROM categories
-    WHERE id = ? AND user_id = ?
-  `,
-  );
+  if (!category) return null;
 
-  const category = categoryStmt.get(categoryId, userId);
+  const { data: subs } = await supabase
+    .from("sub_categories")
+    .select("id, name")
+    .eq("category_id", categoryId)
+    .order("sort_order")
+    .order("created_at");
 
-  if (!category) {
-    return null;
+  const subCategories: SubCategory[] = [];
+  for (const sc of subs ?? []) {
+    const { data: tasks } = await supabase
+      .from("tasks")
+      .select("id, is_completed")
+      .eq("sub_category_id", sc.id);
+    const pendingCount =
+      tasks?.filter((t) => !t.is_completed).length ?? 0;
+    subCategories.push({
+      id: sc.id,
+      name: sc.name,
+      pendingCount,
+    });
   }
-
-  const subStmt = db.prepare<unknown, SubCategory>(
-    `
-    SELECT
-      sc.id,
-      sc.name,
-      COALESCE(SUM(CASE WHEN t.is_completed = 0 THEN 1 ELSE 0 END), 0) AS pendingCount
-    FROM sub_categories sc
-    LEFT JOIN tasks t ON t.sub_category_id = sc.id
-    WHERE sc.category_id = ?
-    GROUP BY sc.id, sc.name
-    ORDER BY sc.sort_order, sc.created_at
-  `,
-  );
-
-  const subCategories = subStmt.all(categoryId);
 
   return {
     id: category.id,
@@ -80,25 +100,31 @@ export function getCategorySubCategories(
   };
 }
 
-export function updateSubCategory(
+export async function updateSubCategory(
   subCategoryId: string,
   userId: string,
   name: string,
-): boolean {
-  const db = getDb();
-  const row = db
-    .prepare(
-      `
-    SELECT sc.id FROM sub_categories sc
-    JOIN categories c ON c.id = sc.category_id
-    WHERE sc.id = ? AND c.user_id = ?
-  `,
-    )
-    .get(subCategoryId, userId) as { id: string } | undefined;
-  if (!row) return false;
-  db.prepare(
-    "UPDATE sub_categories SET name = ?, updated_at = ? WHERE id = ?",
-  ).run(name, new Date().toISOString(), subCategoryId);
+): Promise<boolean> {
+  const { data: subCat } = await supabase
+    .from("sub_categories")
+    .select("id, category_id")
+    .eq("id", subCategoryId)
+    .single();
+
+  if (!subCat) return false;
+
+  const { data: cat } = await supabase
+    .from("categories")
+    .select("id")
+    .eq("id", subCat.category_id)
+    .eq("user_id", userId)
+    .single();
+
+  if (!cat) return false;
+
+  await supabase
+    .from("sub_categories")
+    .update({ name, updated_at: new Date().toISOString() })
+    .eq("id", subCategoryId);
   return true;
 }
-

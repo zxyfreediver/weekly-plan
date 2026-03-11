@@ -8,7 +8,7 @@ export default async function HomePage() {
   if (!userId) {
     redirect("/login");
   }
-  const categories = getCategoriesWithStats(userId);
+  const categories = await getCategoriesWithStats(userId);
 
   return <HomePageClient categories={categories} />;
 }

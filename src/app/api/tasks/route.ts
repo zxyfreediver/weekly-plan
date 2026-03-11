@@ -36,7 +36,7 @@ export async function GET(request: Request) {
     );
   }
 
-  const tasks = getTasksForSubCategory(
+  const tasks = await getTasksForSubCategory(
     parsed.data.subCategoryId,
     parsed.data.weekStart,
   );
@@ -47,7 +47,7 @@ export async function POST(request: Request) {
   try {
     const json = await request.json();
     const body = createTaskSchema.parse(json);
-    const task = createTask(body);
+    const task = await createTask(body);
     return NextResponse.json(task);
   } catch (error) {
     console.error(error);

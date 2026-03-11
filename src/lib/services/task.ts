@@ -1,4 +1,4 @@
-import { getDb } from "@/lib/db";
+import { supabase } from "@/lib/supabase";
 
 export type Task = {
   id: string;
@@ -9,68 +9,48 @@ export type Task = {
   weekStart: string;
 };
 
-export function getTasksForSubCategory(
+export async function getTasksForSubCategory(
   subCategoryId: string,
   weekStart: string,
-): Task[] {
-  const db = getDb();
-  const stmt = db.prepare<unknown, Task>(
-    `
-    SELECT
-      id,
-      content,
-      COALESCE(description, '') AS description,
-      is_completed AS isCompleted,
-      is_priority AS isPriority,
-      week_start AS weekStart
-    FROM tasks
-    WHERE sub_category_id = ? AND week_start = ?
-    ORDER BY is_completed ASC, is_priority DESC, created_at ASC
-  `,
-  );
-  return stmt.all(subCategoryId, weekStart);
+): Promise<Task[]> {
+  const { data } = await supabase
+    .from("tasks")
+    .select("id, content, description, is_completed, is_priority, week_start")
+    .eq("sub_category_id", subCategoryId)
+    .eq("week_start", weekStart)
+    .order("is_completed")
+    .order("is_priority", { ascending: false })
+    .order("created_at");
+
+  return (data ?? []).map((r) => ({
+    id: r.id,
+    content: r.content,
+    description: r.description ?? "",
+    isCompleted: Boolean(r.is_completed),
+    isPriority: Boolean(r.is_priority),
+    weekStart: r.week_start,
+  }));
 }
 
-export function createTask(input: {
+export async function createTask(input: {
   subCategoryId: string;
   content: string;
   description?: string;
   isPriority?: boolean;
   weekStart: string;
-}): Task {
-  const db = getDb();
+}): Promise<Task> {
   const id = crypto.randomUUID();
-  const now = new Date().toISOString();
   const desc = input.description ?? "";
 
-  const stmt = db.prepare(
-    `
-    INSERT INTO tasks (
-      id,
-      sub_category_id,
-      content,
-      description,
-      is_completed,
-      is_priority,
-      week_start,
-      created_at,
-      updated_at
-    )
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-  `,
-  );
-
-  stmt.run(
+  await supabase.from("tasks").insert({
     id,
-    input.subCategoryId,
-    input.content,
-    desc,
-    0,
-    input.isPriority ? 1 : 0,
-    input.weekStart,
-    now,
-    now,
-  );
+    sub_category_id: input.subCategoryId,
+    content: input.content,
+    description: desc,
+    is_completed: false,
+    is_priority: Boolean(input.isPriority),
+    week_start: input.weekStart,
+  });
 
   return {
     id,
@@ -82,81 +62,35 @@ export function createTask(input: {
   };
 }
 
-export function updateTask(
+export async function updateTask(
   id: string,
   updates: Partial<
     Pick<Task, "content" | "description" | "isCompleted" | "isPriority">,
   >,
-): Task | null {
-  const db = getDb();
+): Promise<Task | null> {
+  const { data: existing } = await supabase
+    .from("tasks")
+    .select("id, content, description, is_completed, is_priority, week_start")
+    .eq("id", id)
+    .single();
 
-  const existing = db
-    .prepare<
-      unknown,
-      | {
-          id: string;
-          content: string;
-          description: string;
-          isCompleted: number;
-          isPriority: number;
-          weekStart: string;
-        }
-      | undefined
-    >(
-      `
-      SELECT
-        id,
-        content,
-        COALESCE(description, '') AS description,
-        is_completed AS isCompleted,
-        is_priority AS isPriority,
-        week_start AS weekStart
-      FROM tasks
-      WHERE id = ?
-    `,
-    )
-    .get(id);
+  if (!existing) return null;
 
-  if (!existing) {
-    return null;
-  }
+  const nextContent = updates.content ?? existing.content;
+  const nextDescription = updates.description ?? existing.description ?? "";
+  const nextCompleted = updates.isCompleted ?? Boolean(existing.is_completed);
+  const nextPriority = updates.isPriority ?? Boolean(existing.is_priority);
 
-  const nextContent =
-    updates.content !== undefined ? updates.content : existing.content;
-  const nextDescription =
-    updates.description !== undefined
-      ? updates.description
-      : existing.description;
-  const nextCompleted =
-    updates.isCompleted !== undefined
-      ? updates.isCompleted
-      : Boolean(existing.isCompleted);
-  const nextPriority =
-    updates.isPriority !== undefined
-      ? updates.isPriority
-      : Boolean(existing.isPriority);
-
-  const stmt = db.prepare(
-    `
-    UPDATE tasks
-    SET
-      content = ?,
-      description = ?,
-      is_completed = ?,
-      is_priority = ?,
-      updated_at = ?
-    WHERE id = ?
-  `,
-  );
-
-  stmt.run(
-    nextContent,
-    nextDescription,
-    nextCompleted ? 1 : 0,
-    nextPriority ? 1 : 0,
-    new Date().toISOString(),
-    id,
-  );
+  await supabase
+    .from("tasks")
+    .update({
+      content: nextContent,
+      description: nextDescription,
+      is_completed: nextCompleted,
+      is_priority: nextPriority,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", id);
 
   return {
     id: existing.id,
@@ -164,13 +98,10 @@ export function updateTask(
     description: nextDescription,
     isCompleted: nextCompleted,
     isPriority: nextPriority,
-    weekStart: existing.weekStart,
+    weekStart: existing.week_start,
   };
 }
 
-export function deleteTask(id: string) {
-  const db = getDb();
-  const stmt = db.prepare("DELETE FROM tasks WHERE id = ?");
-  stmt.run(id);
+export async function deleteTask(id: string): Promise<void> {
+  await supabase.from("tasks").delete().eq("id", id);
 }
-

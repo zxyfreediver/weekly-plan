@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { getCategorySubCategories } from "@/lib/services/category";
-import { getDb } from "@/lib/db";
+import { supabase } from "@/lib/supabase";
 import { getCurrentUser } from "@/lib/auth";
 
 const createSubCategorySchema = z.object({
@@ -17,7 +17,7 @@ export async function GET(
   if (!userId) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
-  const data = getCategorySubCategories(id, userId);
+  const data = await getCategorySubCategories(id, userId);
   if (!data) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
@@ -33,7 +33,7 @@ export async function POST(
   if (!userId) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
-  const data = getCategorySubCategories(categoryId, userId);
+  const data = await getCategorySubCategories(categoryId, userId);
   if (!data) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
@@ -41,31 +41,26 @@ export async function POST(
     const json = await request.json();
     const body = createSubCategorySchema.parse(json);
 
-    const db = getDb();
+    const { data: maxRow } = await supabase
+      .from("sub_categories")
+      .select("sort_order")
+      .eq("category_id", categoryId)
+      .order("sort_order", { ascending: false })
+      .limit(1)
+      .single();
+
+    const sortOrder = (maxRow?.sort_order ?? 0) + 1;
     const id = crypto.randomUUID();
     const now = new Date().toISOString();
 
-    const sortRow = db
-      .prepare(
-        "SELECT COALESCE(MAX(sort_order), 0) as maxOrder FROM sub_categories WHERE category_id = ?",
-      )
-      .get(categoryId) as { maxOrder: number };
-
-    const stmt = db.prepare(
-      `
-      INSERT INTO sub_categories (
-        id,
-        category_id,
-        name,
-        sort_order,
-        created_at,
-        updated_at
-      )
-      VALUES (?, ?, ?, ?, ?, ?)
-    `,
-    );
-
-    stmt.run(id, categoryId, body.name, sortRow.maxOrder + 1, now, now);
+    await supabase.from("sub_categories").insert({
+      id,
+      category_id: categoryId,
+      name: body.name,
+      sort_order: sortOrder,
+      created_at: now,
+      updated_at: now,
+    });
 
     return NextResponse.json({ id, name: body.name });
   } catch (error) {

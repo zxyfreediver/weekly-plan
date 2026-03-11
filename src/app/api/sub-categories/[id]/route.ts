@@ -19,7 +19,7 @@ export async function PUT(
   try {
     const json = await request.json();
     const body = updateSchema.parse(json);
-    const ok = updateSubCategory(id, userId, body.name);
+    const ok = await updateSubCategory(id, userId, body.name);
     if (!ok) {
       return NextResponse.json({ error: "Not found" }, { status: 404 });
     }
