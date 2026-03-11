@@ -167,11 +167,13 @@ export default function WeeklyTasksPage({ params }: WeeklyTasksPageProps) {
   const getTaskStats = (task: Task) => {
     const total = task.subTasks.length;
     const completed = task.subTasks.filter((s) => s.isCompleted).length;
-    const important = task.subTasks.filter((s) => s.isPriority).length;
+    const importantPending = task.subTasks.filter(
+      (s) => s.isPriority && !s.isCompleted,
+    ).length;
     const unimportantPending = task.subTasks.filter(
       (s) => !s.isCompleted && !s.isPriority,
     ).length;
-    return { total, completed, important, unimportantPending };
+    return { total, completed, importantPending, unimportantPending };
   };
 
   const handleEditTask = async (e: React.FormEvent) => {
@@ -489,13 +491,21 @@ export default function WeeklyTasksPage({ params }: WeeklyTasksPageProps) {
                       className="min-w-0 flex-1 text-left"
                     >
                       <span
-                        className={`flex min-h-5 items-center text-sm ${
+                        className={`flex min-h-5 flex-wrap items-center gap-x-1.5 text-sm ${
                           task.isCompleted
                             ? "line-through text-slate-400"
                             : "font-semibold text-slate-700"
                         }`}
                       >
                         {task.content}
+                        {(() => {
+                          const { total } = getTaskStats(task);
+                          return total > 0 ? (
+                            <span className="text-xs font-normal text-slate-500">
+                              （共 {total} 子任务）
+                            </span>
+                          ) : null;
+                        })()}
                       </span>
                       {(task.description ?? "") && (
                         <span
@@ -506,24 +516,42 @@ export default function WeeklyTasksPage({ params }: WeeklyTasksPageProps) {
                           {task.description}
                         </span>
                       )}
-                      <span className="mt-0.5 block text-xs text-slate-400">
+                      <span className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-slate-400">
                         {(() => {
-                          const { total, completed, important, unimportantPending } =
-                            getTaskStats(task);
-                          const parts: string[] = [];
-                          if (total > 0) {
-                            parts.push(`${total} 个子任务`);
-                            parts.push(`${completed} 已完成`);
-                            if (important > 0) parts.push(`${important} 高优先级`);
-                            if (unimportantPending > 0)
-                              parts.push(`${unimportantPending} 未完成`);
-                          } else {
-                            parts.push("暂无子任务");
+                          const {
+                            total,
+                            completed,
+                            importantPending,
+                            unimportantPending,
+                          } = getTaskStats(task);
+                          if (total === 0) {
+                            return (
+                              <>
+                                <span>暂无子任务</span>
+                                <span>
+                                  {expandedTaskId === task.id ? "▲ 收起" : "▼ 展开"}
+                                </span>
+                              </>
+                            );
                           }
-                          parts.push(
-                            expandedTaskId === task.id ? "▲ 收起" : "▼ 展开",
+                          return (
+                            <>
+                              {importantPending > 0 && (
+                                <span className="inline-flex items-center rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-medium text-amber-800">
+                                  {importantPending} 高优先级未完成
+                                </span>
+                              )}
+                              {unimportantPending > 0 && (
+                                <span>{unimportantPending} 普通未完成</span>
+                              )}
+                              {completed > 0 && (
+                                <span>{completed} 已完成</span>
+                              )}
+                              <span>
+                                {expandedTaskId === task.id ? "▲ 收起" : "▼ 展开"}
+                              </span>
+                            </>
                           );
-                          return parts.join(" · ");
                         })()}
                       </span>
                     </button>
