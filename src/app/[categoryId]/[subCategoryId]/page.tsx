@@ -362,18 +362,18 @@ export default function WeeklyTasksPage({ params }: WeeklyTasksPageProps) {
                       className="min-w-0 flex-1 text-left"
                     >
                       <span
-                        className={`flex items-center gap-1.5 text-sm ${
+                        className={`flex min-h-5 items-center gap-1.5 text-sm ${
                           task.isCompleted
                             ? "line-through text-slate-400"
                             : "font-semibold text-slate-700"
                         }`}
                       >
                         <span className="truncate">{task.content}</span>
-                        {task.isPriority && (
-                          <span className="shrink-0 rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-medium text-amber-700">
+                        {task.isPriority ? (
+                          <span className="shrink-0 rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-medium leading-none text-amber-700">
                             高优先级
                           </span>
-                        )}
+                        ) : null}
                       </span>
                       {(task.description ?? "") && (
                         <span
