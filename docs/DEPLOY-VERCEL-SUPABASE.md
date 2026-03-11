@@ -4,7 +4,7 @@
 
 1. 打开 [supabase.com](https://supabase.com) 并登录
 2. 新建项目，选择区域
-3. 进入 **SQL Editor**，执行 `supabase/migrations/001_initial.sql` 中的 SQL 创建表结构
+3. **必须**：进入 **SQL Editor**，复制并执行 `supabase/migrations/001_initial.sql` 中的完整 SQL，创建 `users`、`categories`、`sub_categories`、`tasks` 表。**未执行此步骤会导致创建分类等操作静默失败。**
 
 ## 2. 获取 Supabase 凭证
 

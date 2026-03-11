@@ -26,19 +26,27 @@ export async function POST(request: Request) {
     const json = await request.json();
     const body = createCategorySchema.parse(json);
 
-    const { data: maxRow } = await supabase
+    const { data: maxRow, error: selectErr } = await supabase
       .from("categories")
       .select("sort_order")
       .eq("user_id", userId)
       .order("sort_order", { ascending: false })
       .limit(1)
-      .single();
+      .maybeSingle();
+
+    if (selectErr) {
+      console.error("[categories POST] select error:", selectErr);
+      return NextResponse.json(
+        { error: `数据库查询失败: ${selectErr.message}` },
+        { status: 500 },
+      );
+    }
 
     const sortOrder = (maxRow?.sort_order ?? 0) + 1;
     const id = crypto.randomUUID();
     const now = new Date().toISOString();
 
-    await supabase.from("categories").insert({
+    const { error: insertErr } = await supabase.from("categories").insert({
       id,
       user_id: userId,
       name: body.name,
@@ -46,6 +54,14 @@ export async function POST(request: Request) {
       created_at: now,
       updated_at: now,
     });
+
+    if (insertErr) {
+      console.error("[categories POST] insert error:", insertErr);
+      return NextResponse.json(
+        { error: `创建失败: ${insertErr.message}` },
+        { status: 500 },
+      );
+    }
 
     return NextResponse.json({ id, name: body.name });
   } catch (error) {
