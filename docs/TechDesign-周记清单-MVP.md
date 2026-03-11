@@ -163,7 +163,7 @@ CREATE TABLE categories (...);
 -- 子分类 (2025年工作, 2026年工作 等)
 CREATE TABLE sub_categories (...);
 
--- 主任务（无 is_priority，优先级在子任务层）
+-- 主任务（无 is_priority，优先级在子任务层；source_task_id 用于一键导入溯源）
 CREATE TABLE tasks (
     id TEXT PRIMARY KEY,
     sub_category_id TEXT NOT NULL REFERENCES sub_categories(id) ON DELETE CASCADE,
@@ -171,17 +171,23 @@ CREATE TABLE tasks (
     description TEXT DEFAULT '',
     is_completed BOOLEAN DEFAULT FALSE,
     week_start DATE NOT NULL,
+    source_task_id TEXT REFERENCES tasks(id) ON DELETE SET NULL,
     ...
 );
 
--- 子任务（含 description、assignee、is_priority、due_date）
+-- 子任务（含 description、assignee、is_priority、due_date、source_sub_task_id）
 CREATE TABLE sub_tasks (...);
 
--- 子任务进度（含 content、assignee、is_priority、is_completed、due_date）
+-- 子任务进度（含 content、assignee、is_priority、is_completed、due_date、source_progress_id）
 CREATE TABLE sub_task_progress (...);
 ```
 
 默认用户：`INSERT INTO users (id, name) VALUES ('admin', 'admin')`，`AUTH_USERNAME` 需与此一致。
+
+### 一键导入
+
+- API：`POST /api/tasks/import-from-last-week`
+- 设计文档：`docs/DESIGN-import-weekly-incomplete.md`
 
 ---
 
@@ -509,6 +515,6 @@ jobs:
 
 ---
 
-*Version: 1.2*
+*Version: 1.3*
 *Last Updated: 2025-03-10*
 *Next Review: 2025-04-10*

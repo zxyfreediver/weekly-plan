@@ -7,6 +7,7 @@
 - **NextAuth.js**: https://next-auth.js.org
 - **Zod**: https://zod.dev
 - **Supabase**: https://supabase.com/docs
+- **SWR**: https://swr.vercel.app
 
 ## 项目文档
 

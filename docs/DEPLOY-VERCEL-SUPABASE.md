@@ -4,7 +4,8 @@
 
 1. 打开 [supabase.com](https://supabase.com) 并登录
 2. 新建项目，选择区域
-3. **必须**：进入 **SQL Editor**，执行 `supabase/migrations/001_initial.sql`（包含完整表结构与默认用户 `admin`）。
+3. **必须**：进入 **SQL Editor**，执行 `supabase/migrations/001_initial.sql`（含完整表结构、默认用户 `admin`、溯源字段）。
+   **已有数据库**：若已执行过旧版 001，需再执行 `002_import_source.sql` 添加溯源字段。
    **未执行会导致创建分类等操作失败。**
 
 ## 2. 获取 Supabase 凭证

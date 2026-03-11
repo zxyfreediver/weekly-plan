@@ -6,10 +6,10 @@
 |------|------|----------|
 | Frontend | Next.js | 16+ (App Router) |
 | Styling | Tailwind CSS | 3.x |
-| State | React Server Components + useState | - |
+| State | React Server Components + useState + SWR | 首页/分类页 SWR 缓存 |
 | Backend | Next.js API Routes | - |
 | Database | Supabase | PostgreSQL，@supabase/supabase-js |
-| Auth | 自建 Cookie Session | AUTH_USERNAME / AUTH_PASSWORD |
+| Auth | 自建 Cookie Session + middleware | 鉴权前置，AUTH_USERNAME / AUTH_PASSWORD |
 | Validation | Zod | - |
 | PWA | Serwist | 9.5.x |
 | Deploy | Vercel | 推荐 |
@@ -32,8 +32,10 @@ src/
 │       ├── sub-categories/
 │       ├── tasks/
 │       ├── tasks/[id]/sub-tasks/
+│       ├── tasks/import-from-last-week
 │       └── sub-tasks/[id]/progress/
 ├── components/
+├── middleware.ts          # 鉴权
 ├── lib/
 │   ├── supabase.ts      # Supabase 客户端
 │   ├── auth.ts
@@ -52,7 +54,8 @@ src/
   "tailwindcss": "^3.x",
   "@supabase/supabase-js": "^2.x",
   "zod": "^4.x",
-  "serwist": "^9.5.x"
+  "serwist": "^9.5.x",
+  "swr": "^2.x"
 }
 ```
 

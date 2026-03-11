@@ -100,13 +100,16 @@
 
 ---
 
-## 七、API 设计（待实现时参考）
+## 七、API 设计（已实现）
 
 ```
 POST /api/tasks/import-from-last-week
 Body: { subCategoryId: string, weekStart: string }  // weekStart = 本周一
-Response: { imported: number, skipped: number }
+Response: { imported: number, skipped: number, message?: string }
 ```
+
+- 实现位置：`src/app/api/tasks/import-from-last-week/route.ts`
+- 服务层：`src/lib/services/import.ts`
 
 ---
 
@@ -119,5 +122,6 @@ Response: { imported: number, skipped: number }
 
 ---
 
-*文档版本：1.0*
+*文档版本：1.1*
 *创建日期：2025-03-10*
+*实现状态：已完成*

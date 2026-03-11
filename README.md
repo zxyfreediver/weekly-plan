@@ -43,12 +43,22 @@ pnpm dev
 2. 在 Vercel 导入项目，配置环境变量
 3. 部署
 
+## 核心功能
+
+- 多级分类（大分类 → 子分类 → 周度任务）
+- 主任务 → 子任务 → 进度，支持优先级、截止日期
+- 一键展开/收起、不展示已完成
+- 一键导入上周未完成（与本周合并）
+- 周选择器：年份选择、全年周列表、第N周显示
+- 本周已完成汇总、AI 总结（预留）
+
 ## 项目结构
 
 ```
 src/
 ├── app/                    # Next.js App Router
 │   ├── page.tsx            # 首页（分类列表）
+│   ├── loading.tsx         # 骨架屏
 │   ├── login/              # 登录页
 │   ├── [categoryId]/       # 大分类、子分类、任务
 │   └── api/                # API 路由
@@ -57,6 +67,7 @@ src/
 │   ├── supabase.ts         # Supabase 客户端
 │   ├── auth.ts             # 认证
 │   └── services/           # 业务逻辑
+├── middleware.ts           # 鉴权
 └── styles/
 ```
 
@@ -65,6 +76,7 @@ src/
 - [部署指南](docs/DEPLOY-VERCEL-SUPABASE.md)
 - [技术设计](docs/TechDesign-周记清单-MVP.md)
 - [UI 规格](docs/UI-Spec-周记清单-Stitch.md)
+- [一键导入设计](docs/DESIGN-import-weekly-incomplete.md)
 
 ## 许可证
 

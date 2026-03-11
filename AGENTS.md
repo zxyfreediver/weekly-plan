@@ -58,7 +58,7 @@
 
 **Last Updated:** 2025-03-10
 **Working On:** -
-**Recently Completed:** 子任务与进度、一键展开/收起、不展示已完成、Supabase 脚本合并（默认用户 admin）、文档更新
+**Recently Completed:** 子任务与进度、一键展开/收起、不展示已完成、一键导入上周未完成、周选择器增强（年份/周列表/第N周）、路由优化（loading/SWR/middleware）、主任务高优先级统计修复、文档更新
 **Blocked By:** None
 
 ## Roadmap
@@ -73,9 +73,11 @@
 ### Phase 2: Core Features ✅
 - [x] 多级分类（大分类 + 子分类）
 - [x] 周度任务列表（主任务 → 子任务 → 进度，增删改、划掉完成）
-- [x] 任务优先级（高亮，子任务/进度层）
+- [x] 任务优先级（高亮，子任务/进度层，含进度高优先级联动）
 - [x] 任务描述（2 行预览 + 展开编辑）
 - [x] 一键展开/收起、不展示已完成
+- [x] 一键导入上周未完成
+- [x] 周选择器（年份、全年周列表、第N周）
 - [ ] 未完成自动同步到本周
 
 ### Phase 3: Enhancement
@@ -87,6 +89,7 @@
 ### Phase 4: Polish + Deploy ✅
 - [x] PWA 配置
 - [x] Vercel + Supabase 部署
+- [x] 路由优化（loading.tsx、SWR 缓存、middleware 鉴权）
 - [ ] Docker 备选部署
 
 ## What NOT To Do
