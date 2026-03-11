@@ -59,9 +59,6 @@ export default function WeeklyTasksPage({ params }: WeeklyTasksPageProps) {
   const [editSubmitting, setEditSubmitting] = useState(false);
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
   const [expandedTaskId, setExpandedTaskId] = useState<string | null>(null);
-  const [inlineContent, setInlineContent] = useState("");
-  const [inlineDescription, setInlineDescription] = useState("");
-  const [inlineSaving, setInlineSaving] = useState(false);
   const [newSubTaskId, setNewSubTaskId] = useState<string | null>(null);
   const [newSubTaskContent, setNewSubTaskContent] = useState("");
   const [newSubTaskDesc, setNewSubTaskDesc] = useState("");
@@ -161,41 +158,20 @@ export default function WeeklyTasksPage({ params }: WeeklyTasksPageProps) {
       return;
     }
     setExpandedTaskId(task.id);
-    setInlineContent(task.content);
-    setInlineDescription(task.description ?? "");
     setNewSubTaskContent("");
     setNewSubTaskDesc("");
     setNewSubTaskAssignee("");
     setNewSubTaskPriority(false);
   };
 
-  const handleInlineSave = async () => {
-    if (!expandedTaskId) return;
-    const trimmed = inlineContent.trim();
-    if (!trimmed) return;
-    setInlineSaving(true);
-    try {
-      const res = await fetch(`/api/tasks/${expandedTaskId}`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          content: trimmed,
-          description: inlineDescription,
-        }),
-      });
-      if (!res.ok) return;
-      setTasks((prev) =>
-        prev.map((t) =>
-          t.id === expandedTaskId
-            ? { ...t, content: trimmed, description: inlineDescription }
-            : t,
-        ),
-      );
-    } catch (err) {
-      console.error(err);
-    } finally {
-      setInlineSaving(false);
-    }
+  const getTaskStats = (task: Task) => {
+    const total = task.subTasks.length;
+    const completed = task.subTasks.filter((s) => s.isCompleted).length;
+    const important = task.subTasks.filter((s) => s.isPriority).length;
+    const unimportantPending = task.subTasks.filter(
+      (s) => !s.isCompleted && !s.isPriority,
+    ).length;
+    return { total, completed, important, unimportantPending };
   };
 
   const handleEditTask = async (e: React.FormEvent) => {
@@ -531,8 +507,24 @@ export default function WeeklyTasksPage({ params }: WeeklyTasksPageProps) {
                         </span>
                       )}
                       <span className="mt-0.5 block text-xs text-slate-400">
-                        {task.subTasks.length} 个子任务 ·{" "}
-                        {expandedTaskId === task.id ? "▲ 收起" : "▼ 展开"}
+                        {(() => {
+                          const { total, completed, important, unimportantPending } =
+                            getTaskStats(task);
+                          const parts: string[] = [];
+                          if (total > 0) {
+                            parts.push(`${total} 个子任务`);
+                            parts.push(`${completed} 已完成`);
+                            if (important > 0) parts.push(`${important} 高优先级`);
+                            if (unimportantPending > 0)
+                              parts.push(`${unimportantPending} 未完成`);
+                          } else {
+                            parts.push("暂无子任务");
+                          }
+                          parts.push(
+                            expandedTaskId === task.id ? "▲ 收起" : "▼ 展开",
+                          );
+                          return parts.join(" · ");
+                        })()}
                       </span>
                     </button>
                   </div>
@@ -557,49 +549,17 @@ export default function WeeklyTasksPage({ params }: WeeklyTasksPageProps) {
                 </div>
                 {expandedTaskId === task.id && (
                   <div className="border-t border-slate-100 bg-white px-3 py-3">
-                    <div className="space-y-4">
-                      <div className="space-y-2">
-                        <div className="text-xs font-medium text-slate-500">
-                          主任务
-                        </div>
-                        <div className="flex gap-2">
-                          <input
-                            type="text"
-                            value={inlineContent}
-                            onChange={(e) => setInlineContent(e.target.value)}
-                            placeholder="任务内容"
-                            className="flex-1 rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none focus:border-primary focus:ring-1 focus:ring-primary"
-                          />
-                          <button
-                            type="button"
-                            onClick={handleInlineSave}
-                            disabled={inlineSaving || !inlineContent.trim()}
-                            className="rounded-lg bg-primary px-3 py-2 text-sm font-medium text-white hover:bg-blue-600 disabled:opacity-70"
-                          >
-                            {inlineSaving ? "保存中..." : "保存"}
-                          </button>
-                        </div>
-                        <textarea
-                          value={inlineDescription}
-                          onChange={(e) =>
-                            setInlineDescription(e.target.value)
-                          }
-                          placeholder="添加具体描述..."
-                          rows={2}
-                          className="w-full resize-none rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none focus:border-primary focus:ring-1 focus:ring-primary"
-                        />
+                    <div className="space-y-2">
+                      <div className="text-xs font-medium text-slate-500">
+                        子任务
                       </div>
-                      <div className="space-y-2">
-                        <div className="text-xs font-medium text-slate-500">
-                          子任务
-                        </div>
-                        <ul className="space-y-1.5">
-                          {sortedSubTasks(task.subTasks).map((st) => (
-                            <li
-                              key={st.id}
-                              className="flex items-center gap-2 rounded-lg border border-slate-100 bg-slate-50 px-2 py-1.5"
-                            >
-                              <button
+                      <ul className="space-y-1.5">
+                        {sortedSubTasks(task.subTasks).map((st) => (
+                          <li
+                            key={st.id}
+                            className="flex items-center gap-2 rounded-lg border border-slate-100 bg-slate-50 px-2 py-1.5"
+                          >
+                            <button
                                 type="button"
                                 onClick={() =>
                                   handleToggleSubTaskCompleted(task.id, st)
