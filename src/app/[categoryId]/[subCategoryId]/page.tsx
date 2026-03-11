@@ -466,7 +466,8 @@ export default function WeeklyTasksPage({ params }: WeeklyTasksPageProps) {
   };
 
   const isEffectivePriority = (st: SubTask) =>
-    st.isPriority || (st.progress?.some((p) => p.isPriority) ?? false);
+    st.isPriority ||
+    (st.progress?.some((p) => p.isPriority && !p.isCompleted) ?? false);
 
   const toggleSubTaskExpand = (st: SubTask) => {
     if (expandedSubTaskId === st.id) {
