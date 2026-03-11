@@ -1,12 +1,14 @@
 import { supabase } from "@/lib/supabase";
+import { getSubTasksByTaskId } from "./sub_task";
+import type { SubTask } from "./sub_task";
 
 export type Task = {
   id: string;
   content: string;
   description: string;
   isCompleted: boolean;
-  isPriority: boolean;
   weekStart: string;
+  subTasks: SubTask[];
 };
 
 export async function getTasksForSubCategory(
@@ -15,62 +17,64 @@ export async function getTasksForSubCategory(
 ): Promise<Task[]> {
   const { data } = await supabase
     .from("tasks")
-    .select("id, content, description, is_completed, is_priority, week_start")
+    .select("id, content, description, is_completed, week_start")
     .eq("sub_category_id", subCategoryId)
     .eq("week_start", weekStart)
     .order("is_completed")
-    .order("is_priority", { ascending: false })
     .order("created_at");
 
-  return (data ?? []).map((r) => ({
-    id: r.id,
-    content: r.content,
-    description: r.description ?? "",
-    isCompleted: Boolean(r.is_completed),
-    isPriority: Boolean(r.is_priority),
-    weekStart: r.week_start,
-  }));
+  const tasks: Task[] = [];
+  for (const r of data ?? []) {
+    const subTasks = await getSubTasksByTaskId(r.id);
+    tasks.push({
+      id: r.id,
+      content: r.content,
+      description: r.description ?? "",
+      isCompleted: Boolean(r.is_completed),
+      weekStart: r.week_start,
+      subTasks,
+    });
+  }
+  return tasks;
 }
 
 export async function createTask(input: {
   subCategoryId: string;
   content: string;
   description?: string;
-  isPriority?: boolean;
   weekStart: string;
 }): Promise<Task> {
   const id = crypto.randomUUID();
   const desc = input.description ?? "";
 
-  await supabase.from("tasks").insert({
+  const { error } = await supabase.from("tasks").insert({
     id,
     sub_category_id: input.subCategoryId,
     content: input.content,
     description: desc,
     is_completed: false,
-    is_priority: Boolean(input.isPriority),
     week_start: input.weekStart,
   });
+
+  if (error) throw error;
 
   return {
     id,
     content: input.content,
     description: desc,
     isCompleted: false,
-    isPriority: Boolean(input.isPriority),
     weekStart: input.weekStart,
+    subTasks: [],
   };
 }
 
 export async function updateTask(
   id: string,
-  updates: Partial<
-    Pick<Task, "content" | "description" | "isCompleted" | "isPriority">
-  >,
+  updates: Partial<Pick<Task, "content" | "description" | "isCompleted">>,
 ): Promise<Task | null> {
   const { data: existing } = await supabase
     .from("tasks")
-    .select("id, content, description, is_completed, is_priority, week_start")
+    .select("id, content, description, is_completed, week_start")
     .eq("id", id)
     .single();
 
@@ -79,26 +83,27 @@ export async function updateTask(
   const nextContent = updates.content ?? existing.content;
   const nextDescription = updates.description ?? existing.description ?? "";
   const nextCompleted = updates.isCompleted ?? Boolean(existing.is_completed);
-  const nextPriority = updates.isPriority ?? Boolean(existing.is_priority);
 
-  await supabase
+  const { error } = await supabase
     .from("tasks")
     .update({
       content: nextContent,
       description: nextDescription,
       is_completed: nextCompleted,
-      is_priority: nextPriority,
       updated_at: new Date().toISOString(),
     })
     .eq("id", id);
 
+  if (error) throw error;
+
+  const subTasks = await getSubTasksByTaskId(id);
   return {
     id: existing.id,
     content: nextContent,
     description: nextDescription,
     isCompleted: nextCompleted,
-    isPriority: nextPriority,
     weekStart: existing.week_start,
+    subTasks,
   };
 }
 

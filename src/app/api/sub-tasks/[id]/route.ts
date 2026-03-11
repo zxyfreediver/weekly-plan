@@ -1,11 +1,13 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { deleteTask, updateTask } from "@/lib/services/task";
+import { deleteSubTask, updateSubTask } from "@/lib/services/sub_task";
 
-const updateTaskSchema = z.object({
+const updateSubTaskSchema = z.object({
   content: z.string().min(1).max(500).optional(),
   description: z.string().max(2000).optional(),
+  assignee: z.string().max(100).optional(),
   isCompleted: z.boolean().optional(),
+  isPriority: z.boolean().optional(),
 });
 
 export async function PUT(
@@ -15,18 +17,18 @@ export async function PUT(
   const { id } = await params;
   try {
     const json = await request.json();
-    const body = updateTaskSchema.parse(json);
-    const task = await updateTask(id, body);
-    if (!task) {
+    const body = updateSubTaskSchema.parse(json);
+    const subTask = await updateSubTask(id, body);
+    if (!subTask) {
       return NextResponse.json({ error: "Not found" }, { status: 404 });
     }
-    return NextResponse.json(task);
+    return NextResponse.json(subTask);
   } catch (error) {
     console.error(error);
     return NextResponse.json(
       {
         error:
-          error instanceof Error ? error.message : "Failed to update task",
+          error instanceof Error ? error.message : "Failed to update sub task",
       },
       { status: 400 },
     );
@@ -39,17 +41,16 @@ export async function DELETE(
 ) {
   const { id } = await params;
   try {
-    await deleteTask(id);
+    await deleteSubTask(id);
     return NextResponse.json({ ok: true });
   } catch (error) {
     console.error(error);
     return NextResponse.json(
       {
         error:
-          error instanceof Error ? error.message : "Failed to delete task",
+          error instanceof Error ? error.message : "Failed to delete sub task",
       },
       { status: 500 },
     );
   }
 }
-

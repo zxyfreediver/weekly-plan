@@ -16,7 +16,6 @@ const createTaskSchema = z.object({
   subCategoryId: z.string().min(1),
   content: z.string().min(1).max(500),
   description: z.string().max(2000).optional(),
-  isPriority: z.boolean().optional(),
   weekStart: z
     .string()
     .regex(/^\d{4}-\d{2}-\d{2}$/),
