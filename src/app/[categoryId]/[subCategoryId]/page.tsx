@@ -112,7 +112,6 @@ export default function WeeklyTasksPage({ params }: WeeklyTasksPageProps) {
   const [editTask, setEditTask] = useState<Task | null>(null);
   const [editContent, setEditContent] = useState("");
   const [editDescription, setEditDescription] = useState("");
-  const [editSubmitting, setEditSubmitting] = useState(false);
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
   const [expandedTaskIds, setExpandedTaskIds] = useState<Set<string>>(new Set());
   const [newSubTaskId, setNewSubTaskId] = useState<string | null>(null);
@@ -147,6 +146,10 @@ export default function WeeklyTasksPage({ params }: WeeklyTasksPageProps) {
   } | null>(null);
   const [importLoading, setImportLoading] = useState(false);
   const [importToast, setImportToast] = useState<string | null>(null);
+  const [addTaskLoading, setAddTaskLoading] = useState(false);
+  const [addSubTaskLoading, setAddSubTaskLoading] = useState<string | null>(null);
+  const [addProgressLoading, setAddProgressLoading] = useState<string | null>(null);
+  const [saveToast, setSaveToast] = useState<string | null>(null);
 
   const getDueDateStatus = (dueDate: string | null) => {
     if (!dueDate) return null;
@@ -347,7 +350,6 @@ export default function WeeklyTasksPage({ params }: WeeklyTasksPageProps) {
     setEditTask(task);
     setEditContent(task.content);
     setEditDescription(task.description);
-    setEditSubmitting(false);
   };
 
   const toggleExpand = (task: Task) => {
@@ -374,7 +376,14 @@ export default function WeeklyTasksPage({ params }: WeeklyTasksPageProps) {
     if (!editTask) return;
     const trimmed = editContent.trim();
     if (!trimmed) return;
-    setEditSubmitting(true);
+    setTasks((prev) =>
+      prev.map((t) =>
+        t.id === editTask.id
+          ? { ...t, content: trimmed, description: editDescription }
+          : t,
+      ),
+    );
+    setEditTask(null);
     try {
       const res = await fetch(`/api/tasks/${editTask.id}`, {
         method: "PUT",
@@ -384,19 +393,12 @@ export default function WeeklyTasksPage({ params }: WeeklyTasksPageProps) {
           description: editDescription,
         }),
       });
-      if (!res.ok) return;
-      setTasks((prev) =>
-        prev.map((t) =>
-          t.id === editTask.id
-            ? { ...t, content: trimmed, description: editDescription }
-            : t,
-        ),
-      );
-      setEditTask(null);
+      if (!res.ok) throw new Error("保存失败");
+      await loadTasks();
     } catch (err) {
-      console.error(err);
-    } finally {
-      setEditSubmitting(false);
+      setSaveToast(err instanceof Error ? err.message : "保存失败，正在刷新");
+      setTimeout(() => setSaveToast(null), 3000);
+      await loadTasks();
     }
   };
 
@@ -419,6 +421,8 @@ export default function WeeklyTasksPage({ params }: WeeklyTasksPageProps) {
   const handleAddTask = async () => {
     const content = newTask.trim();
     if (!content) return;
+    setAddTaskLoading(true);
+    setLoading(true);
     try {
       const res = await fetch("/api/tasks", {
         method: "POST",
@@ -429,18 +433,25 @@ export default function WeeklyTasksPage({ params }: WeeklyTasksPageProps) {
           weekStart: weekInfo.start,
         }),
       });
-      if (!res.ok) return;
-      const created: Task = await res.json();
-      setTasks((prev) => [...prev, created]);
+      if (!res.ok) throw new Error("添加失败");
       setNewTask("");
+      await loadTasks();
     } catch (error) {
-      console.error(error);
+      setSaveToast(error instanceof Error ? error.message : "添加失败");
+      setTimeout(() => setSaveToast(null), 3000);
+      await loadTasks();
+    } finally {
+      setAddTaskLoading(false);
+      setLoading(false);
     }
   };
 
   const handleAddSubTask = async (taskId: string) => {
     const content = newSubTaskContent.trim();
     if (!content) return;
+    setAddSubTaskLoading(taskId);
+    setNewSubTaskId(null);
+    setLoading(true);
     try {
       const res = await fetch(`/api/tasks/${taskId}/sub-tasks`, {
         method: "POST",
@@ -453,28 +464,20 @@ export default function WeeklyTasksPage({ params }: WeeklyTasksPageProps) {
           dueDate: newSubTaskDueDate.trim() || null,
         }),
       });
-      if (!res.ok) return;
-      const created = (await res.json()) as SubTask;
-      setTasks((prev) =>
-        prev.map((t) =>
-          t.id === taskId
-            ? {
-                ...t,
-                subTasks: [
-                  ...t.subTasks,
-                  { ...created, progress: created.progress ?? [] },
-                ],
-              }
-            : t,
-        ),
-      );
+      if (!res.ok) throw new Error("添加失败");
       setNewSubTaskContent("");
       setNewSubTaskDesc("");
       setNewSubTaskAssignee("");
       setNewSubTaskPriority(false);
-      setNewSubTaskId(null);
+      await loadTasks();
     } catch (error) {
-      console.error(error);
+      setSaveToast(error instanceof Error ? error.message : "添加失败");
+      setTimeout(() => setSaveToast(null), 3000);
+      setNewSubTaskId(taskId);
+      await loadTasks();
+    } finally {
+      setAddSubTaskLoading(null);
+      setLoading(false);
     }
   };
 
@@ -542,6 +545,28 @@ export default function WeeklyTasksPage({ params }: WeeklyTasksPageProps) {
     if (!editSubTask) return;
     const trimmed = editSubTaskContent.trim();
     if (!trimmed) return;
+    setTasks((prev) =>
+      prev.map((t) =>
+        t.id === editSubTask.taskId
+          ? {
+              ...t,
+              subTasks: t.subTasks.map((s) =>
+                s.id === editSubTask.id
+                  ? {
+                      ...s,
+                      content: trimmed,
+                      description: editSubTaskDesc,
+                      assignee: editSubTaskAssignee.trim(),
+                      isPriority: editSubTaskPriority,
+                      dueDate: editSubTaskDueDate.trim() || null,
+                    }
+                  : s,
+              ),
+            }
+          : t,
+      ),
+    );
+    setEditSubTask(null);
     try {
       const res = await fetch(`/api/sub-tasks/${editSubTask.id}`, {
         method: "PUT",
@@ -554,31 +579,12 @@ export default function WeeklyTasksPage({ params }: WeeklyTasksPageProps) {
           dueDate: editSubTaskDueDate.trim() || null,
         }),
       });
-      if (!res.ok) return;
-      setTasks((prev) =>
-        prev.map((t) =>
-          t.id === editSubTask.taskId
-            ? {
-                ...t,
-                subTasks: t.subTasks.map((s) =>
-                  s.id === editSubTask.id
-                    ? {
-                        ...s,
-                        content: trimmed,
-                        description: editSubTaskDesc,
-                        assignee: editSubTaskAssignee.trim(),
-                        isPriority: editSubTaskPriority,
-                        dueDate: editSubTaskDueDate.trim() || null,
-                      }
-                    : s,
-                ),
-              }
-            : t,
-        ),
-      );
-      setEditSubTask(null);
+      if (!res.ok) throw new Error("保存失败");
+      await loadTasks();
     } catch (err) {
-      console.error(err);
+      setSaveToast(err instanceof Error ? err.message : "保存失败，正在刷新");
+      setTimeout(() => setSaveToast(null), 3000);
+      await loadTasks();
     }
   };
 
@@ -666,6 +672,10 @@ export default function WeeklyTasksPage({ params }: WeeklyTasksPageProps) {
   const handleAddProgress = async (taskId: string, subTaskId: string) => {
     const content = newProgressContent.trim();
     if (!content) return;
+    const key = `${taskId}-${subTaskId}`;
+    setAddProgressLoading(key);
+    setNewProgressSubTaskId(null);
+    setLoading(true);
     try {
       const res = await fetch(`/api/sub-tasks/${subTaskId}/progress`, {
         method: "POST",
@@ -677,32 +687,20 @@ export default function WeeklyTasksPage({ params }: WeeklyTasksPageProps) {
           dueDate: newProgressDueDate.trim() || null,
         }),
       });
-      if (!res.ok) return;
-      const created: Progress = await res.json();
-      setTasks((prev) =>
-        prev.map((t) =>
-          t.id === taskId
-            ? {
-                ...t,
-                subTasks: t.subTasks.map((s) =>
-                  s.id === subTaskId
-                    ? {
-                        ...s,
-                        progress: [...(s.progress ?? []), created],
-                      }
-                    : s,
-                ),
-              }
-            : t,
-        ),
-      );
+      if (!res.ok) throw new Error("添加失败");
       setNewProgressContent("");
       setNewProgressAssignee("");
       setNewProgressPriority(false);
       setNewProgressDueDate("");
-      setNewProgressSubTaskId(null);
+      await loadTasks();
     } catch (err) {
-      console.error(err);
+      setSaveToast(err instanceof Error ? err.message : "添加失败");
+      setTimeout(() => setSaveToast(null), 3000);
+      setNewProgressSubTaskId(subTaskId);
+      await loadTasks();
+    } finally {
+      setAddProgressLoading(null);
+      setLoading(false);
     }
   };
 
@@ -755,6 +753,42 @@ export default function WeeklyTasksPage({ params }: WeeklyTasksPageProps) {
     if (!editProgress) return;
     const trimmed = editProgressContent.trim();
     if (!trimmed) return;
+    const task = tasks.find((t) =>
+      t.subTasks.some((s) => s.progress?.some((p) => p.id === editProgress.id)),
+    );
+    const subTask = task?.subTasks.find((s) =>
+      s.progress?.some((p) => p.id === editProgress.id),
+    );
+    if (task && subTask) {
+      setTasks((prev) =>
+        prev.map((t) =>
+          t.id === task.id
+            ? {
+                ...t,
+                subTasks: t.subTasks.map((s) =>
+                  s.id === subTask.id
+                    ? {
+                        ...s,
+                        progress: (s.progress ?? []).map((pr) =>
+                          pr.id === editProgress.id
+                            ? {
+                                ...pr,
+                                content: trimmed,
+                                assignee: editProgressAssignee.trim(),
+                                isPriority: editProgressPriority,
+                                dueDate: editProgressDueDate.trim() || null,
+                              }
+                            : pr,
+                        ),
+                      }
+                    : s,
+                ),
+              }
+            : t,
+        ),
+      );
+    }
+    setEditProgress(null);
     try {
       const res = await fetch(`/api/progress/${editProgress.id}`, {
         method: "PUT",
@@ -766,47 +800,12 @@ export default function WeeklyTasksPage({ params }: WeeklyTasksPageProps) {
           dueDate: editProgressDueDate.trim() || null,
         }),
       });
-      if (!res.ok) return;
-      const task = tasks.find((t) =>
-        t.subTasks.some((s) => s.progress?.some((p) => p.id === editProgress.id)),
-      );
-      if (task) {
-        const subTask = task.subTasks.find((s) =>
-          s.progress?.some((p) => p.id === editProgress.id),
-        );
-        if (subTask) {
-          setTasks((prev) =>
-            prev.map((t) =>
-              t.id === task.id
-                ? {
-                    ...t,
-                    subTasks: t.subTasks.map((s) =>
-                      s.id === subTask.id
-                        ? {
-                            ...s,
-                            progress: (s.progress ?? []).map((pr) =>
-                              pr.id === editProgress.id
-                                ? {
-                                    ...pr,
-                                    content: trimmed,
-                                    assignee: editProgressAssignee.trim(),
-                                    isPriority: editProgressPriority,
-                                    dueDate: editProgressDueDate.trim() || null,
-                                  }
-                                : pr,
-                            ),
-                          }
-                        : s,
-                    ),
-                  }
-                : t,
-            ),
-          );
-        }
-      }
-      setEditProgress(null);
+      if (!res.ok) throw new Error("保存失败");
+      await loadTasks();
     } catch (err) {
-      console.error(err);
+      setSaveToast(err instanceof Error ? err.message : "保存失败，正在刷新");
+      setTimeout(() => setSaveToast(null), 3000);
+      await loadTasks();
     }
   };
 
@@ -1091,6 +1090,9 @@ export default function WeeklyTasksPage({ params }: WeeklyTasksPageProps) {
           </button>
           {importToast && (
             <span className="text-xs text-slate-500">{importToast}</span>
+          )}
+          {saveToast && (
+            <span className="text-xs text-amber-600">{saveToast}</span>
           )}
           <label className="flex cursor-pointer items-center gap-1.5 text-xs text-slate-600">
             <input
@@ -1568,10 +1570,22 @@ export default function WeeklyTasksPage({ params }: WeeklyTasksPageProps) {
                                           onClick={() =>
                                             handleAddProgress(task.id, st.id)
                                           }
-                                          disabled={!newProgressContent.trim()}
+                                          disabled={
+                                            !newProgressContent.trim() ||
+                                            addProgressLoading ===
+                                              `${task.id}-${st.id}`
+                                          }
                                           className="rounded bg-primary px-1.5 py-0.5 text-xs font-medium text-white hover:bg-blue-600 disabled:opacity-70"
                                         >
-                                          添加
+                                          {addProgressLoading ===
+                                          `${task.id}-${st.id}` ? (
+                                            <span className="inline-flex items-center gap-1">
+                                              <span className="h-2 w-2 animate-spin rounded-full border-2 border-white border-t-transparent" />
+                                              添加中
+                                            </span>
+                                          ) : (
+                                            "添加"
+                                          )}
                                         </button>
                                       </div>
                                     </div>
@@ -1586,9 +1600,21 @@ export default function WeeklyTasksPage({ params }: WeeklyTasksPageProps) {
                                       setNewProgressPriority(false);
                                       setNewProgressDueDate("");
                                     }}
-                                    className="mt-2 rounded border border-dashed border-slate-200 px-2 py-1 text-[10px] text-slate-500 hover:border-slate-300 hover:bg-slate-50"
+                                    disabled={
+                                      addProgressLoading ===
+                                      `${task.id}-${st.id}`
+                                    }
+                                    className="mt-2 rounded border border-dashed border-slate-200 px-2 py-1 text-[10px] text-slate-500 hover:border-slate-300 hover:bg-slate-50 disabled:opacity-70"
                                   >
-                                    + 添加进度
+                                    {addProgressLoading ===
+                                    `${task.id}-${st.id}` ? (
+                                      <span className="inline-flex items-center gap-1">
+                                        <span className="h-2.5 w-2.5 animate-spin rounded-full border-2 border-slate-400 border-t-transparent" />
+                                        添加中...
+                                      </span>
+                                    ) : (
+                                      "+ 添加进度"
+                                    )}
                                   </button>
                                 )}
                               </div>
@@ -1668,10 +1694,20 @@ export default function WeeklyTasksPage({ params }: WeeklyTasksPageProps) {
                                 <button
                                   type="button"
                                   onClick={() => handleAddSubTask(task.id)}
-                                  disabled={!newSubTaskContent.trim()}
+                                  disabled={
+                                    !newSubTaskContent.trim() ||
+                                    addSubTaskLoading === task.id
+                                  }
                                   className="rounded bg-primary px-2 py-1 text-xs font-medium text-white hover:bg-blue-600 disabled:opacity-70"
                                 >
-                                  添加
+                                  {addSubTaskLoading === task.id ? (
+                                    <span className="inline-flex items-center gap-1">
+                                      <span className="h-2.5 w-2.5 animate-spin rounded-full border-2 border-white border-t-transparent" />
+                                      添加中
+                                    </span>
+                                  ) : (
+                                    "添加"
+                                  )}
                                 </button>
                               </div>
                             </div>
@@ -1680,9 +1716,17 @@ export default function WeeklyTasksPage({ params }: WeeklyTasksPageProps) {
                           <button
                             type="button"
                             onClick={() => setNewSubTaskId(task.id)}
-                            className="rounded-lg border border-dashed border-slate-200 px-3 py-2 text-xs text-slate-500 hover:border-slate-300 hover:bg-slate-50"
+                            disabled={addSubTaskLoading === task.id}
+                            className="rounded-lg border border-dashed border-slate-200 px-3 py-2 text-xs text-slate-500 hover:border-slate-300 hover:bg-slate-50 disabled:opacity-70"
                           >
-                            + 添加子任务
+                            {addSubTaskLoading === task.id ? (
+                              <span className="inline-flex items-center gap-1.5">
+                                <span className="h-3 w-3 animate-spin rounded-full border-2 border-slate-400 border-t-transparent" />
+                                添加中...
+                              </span>
+                            ) : (
+                              "+ 添加子任务"
+                            )}
                           </button>
                         )}
                       </div>
@@ -1697,7 +1741,7 @@ export default function WeeklyTasksPage({ params }: WeeklyTasksPageProps) {
       {editTask && (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 animate-fade-in"
-          onClick={() => !editSubmitting && setEditTask(null)}
+          onClick={() => setEditTask(null)}
         >
           <div
             className="card w-full max-w-md p-6 animate-scale-in"
@@ -1733,24 +1777,17 @@ export default function WeeklyTasksPage({ params }: WeeklyTasksPageProps) {
               <div className="flex justify-end gap-2">
                 <button
                   type="button"
-                  onClick={() => !editSubmitting && setEditTask(null)}
+                  onClick={() => setEditTask(null)}
                   className="rounded-lg border border-slate-200 px-4 py-2 text-sm text-slate-600 hover:bg-slate-50"
                 >
                   取消
                 </button>
                 <button
                   type="submit"
-                  disabled={editSubmitting || !editContent.trim()}
+                  disabled={!editContent.trim()}
                   className="btn-primary"
                 >
-                  {editSubmitting ? (
-                    <span className="inline-flex items-center gap-2">
-                      <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-white border-t-transparent" />
-                      保存中...
-                    </span>
-                  ) : (
-                    "保存"
-                  )}
+                  保存
                 </button>
               </div>
             </form>
