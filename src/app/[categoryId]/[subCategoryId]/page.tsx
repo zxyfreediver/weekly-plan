@@ -796,10 +796,32 @@ export default function WeeklyTasksPage({ params }: WeeklyTasksPageProps) {
             {sortedTasks.map((task) => (
               <li
                 key={task.id}
-                className="overflow-hidden rounded-lg border border-slate-100 bg-slate-50 transition-shadow duration-200 hover:shadow-sm"
+                className={`overflow-hidden rounded-lg border transition-all duration-200 ${
+                  expandedTaskId === task.id
+                    ? "border-primary/25 bg-white shadow-md"
+                    : "border-slate-100 bg-slate-50 hover:shadow-sm"
+                }`}
               >
                 <div className="flex items-center justify-between px-3 py-2.5">
-                  <div className="flex flex-1 items-center gap-3">
+                  <div className="flex flex-1 items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => toggleExpand(task)}
+                      className={`flex h-6 w-6 shrink-0 items-center justify-center rounded transition-colors ${
+                        expandedTaskId === task.id
+                          ? "bg-primary/15 text-primary"
+                          : "bg-slate-100 text-slate-500 hover:bg-slate-200 hover:text-slate-700"
+                      }`}
+                      title={expandedTaskId === task.id ? "收起" : "展开"}
+                    >
+                      <span
+                        className={`inline-block text-xs transition-transform duration-200 ${
+                          expandedTaskId === task.id ? "rotate-0" : "-rotate-90"
+                        }`}
+                      >
+                        ▼
+                      </span>
+                    </button>
                     <button
                       type="button"
                       onClick={() => handleToggleCompleted(task)}
@@ -848,12 +870,7 @@ export default function WeeklyTasksPage({ params }: WeeklyTasksPageProps) {
                           } = getTaskStats(task);
                           if (total === 0) {
                             return (
-                              <>
-                                <span>暂无子任务</span>
-                                <span>
-                                  {expandedTaskId === task.id ? "▲ 收起" : "▼ 展开"}
-                                </span>
-                              </>
+                              <span className="text-slate-400">暂无子任务</span>
                             );
                           }
                           return (
@@ -869,9 +886,6 @@ export default function WeeklyTasksPage({ params }: WeeklyTasksPageProps) {
                               {completed > 0 && (
                                 <span>{completed} 已完成</span>
                               )}
-                              <span>
-                                {expandedTaskId === task.id ? "▲ 收起" : "▼ 展开"}
-                              </span>
                             </>
                           );
                         })()}
@@ -898,18 +912,44 @@ export default function WeeklyTasksPage({ params }: WeeklyTasksPageProps) {
                   </div>
                 </div>
                 {expandedTaskId === task.id && (
-                  <div className="animate-slide-down border-t border-slate-100 bg-white px-3 py-3">
+                  <div className="animate-slide-down border-l-4 border-l-primary/40 border-t border-slate-100 bg-slate-50/50 px-3 py-3">
                     <div className="space-y-2">
-                      <div className="text-xs font-medium text-slate-500">
-                        子任务
+                      <div className="flex items-center gap-2 text-xs font-medium text-slate-600">
+                        <span className="h-px flex-1 bg-slate-200" />
+                        <span>子任务</span>
+                        <span className="h-px flex-1 bg-slate-200" />
                       </div>
                       <ul className="space-y-1.5">
                         {sortedSubTasks(task.subTasks).map((st) => (
                           <li
                             key={st.id}
-                            className="overflow-hidden rounded-lg border border-slate-100 bg-slate-50"
+                            className={`overflow-hidden rounded-lg border transition-colors ${
+                              expandedSubTaskId === st.id
+                                ? "border-primary/30 bg-white shadow-sm"
+                                : "border-slate-100 bg-slate-50"
+                            }`}
                           >
                             <div className="flex items-center gap-2 px-2 py-1.5">
+                              <button
+                                type="button"
+                                onClick={() => toggleSubTaskExpand(st)}
+                                className={`flex h-5 w-5 shrink-0 items-center justify-center rounded transition-colors ${
+                                  expandedSubTaskId === st.id
+                                    ? "bg-primary/15 text-primary"
+                                    : "bg-slate-100 text-slate-400 hover:bg-slate-200 hover:text-slate-600"
+                                }`}
+                                title={expandedSubTaskId === st.id ? "收起进度" : "展开进度"}
+                              >
+                                <span
+                                  className={`inline-block text-[10px] transition-transform duration-200 ${
+                                    expandedSubTaskId === st.id
+                                      ? "rotate-0"
+                                      : "-rotate-90"
+                                  }`}
+                                >
+                                  ▼
+                                </span>
+                              </button>
                               <button
                                 type="button"
                                 onClick={() =>
@@ -1010,9 +1050,11 @@ export default function WeeklyTasksPage({ params }: WeeklyTasksPageProps) {
                               </div>
                             </div>
                             {expandedSubTaskId === st.id && (
-                              <div className="animate-slide-down border-t border-slate-100 bg-white px-2 py-2">
-                                <div className="mb-1.5 text-xs font-medium text-slate-500">
-                                  进度
+                              <div className="animate-slide-down border-l-2 border-l-primary/30 border-t border-slate-100 bg-slate-50/80 px-2 py-2">
+                                <div className="mb-1.5 flex items-center gap-2 text-xs font-medium text-slate-600">
+                                  <span className="h-px flex-1 bg-slate-200" />
+                                  <span>进度</span>
+                                  <span className="h-px flex-1 bg-slate-200" />
                                 </div>
                                 <ul className="space-y-1">
                                   {sortedProgress(st.progress ?? []).map((p) => (
