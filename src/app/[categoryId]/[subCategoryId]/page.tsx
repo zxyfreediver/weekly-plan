@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { use, useEffect, useMemo, useState } from "react";
+import { StarIcon } from "@/components/StarIcon";
 
 type Progress = {
   id: string;
@@ -1397,12 +1398,12 @@ export default function WeeklyTasksPage({ params }: WeeklyTasksPageProps) {
                                   }
                                   className={`rounded px-1 py-0.5 text-xs hover:bg-slate-100 ${
                                     isEffectivePriority(st)
-                                      ? "text-amber-600"
-                                      : ""
+                                      ? "text-amber-500"
+                                      : "text-slate-300"
                                   }`}
                                   title="优先级"
                                 >
-                                  ⭐
+                                  <StarIcon size={14} />
                                 </button>
                                 <button
                                   type="button"
@@ -1503,11 +1504,11 @@ export default function WeeklyTasksPage({ params }: WeeklyTasksPageProps) {
                                             )
                                           }
                                           className={`rounded px-1 py-0.5 text-[10px] hover:bg-slate-100 ${
-                                            p.isPriority ? "text-amber-600" : ""
+                                            p.isPriority ? "text-amber-500" : "text-slate-300"
                                           }`}
                                           title="优先级"
                                         >
-                                          ⭐
+                                          <StarIcon size={12} />
                                         </button>
                                         <button
                                           type="button"

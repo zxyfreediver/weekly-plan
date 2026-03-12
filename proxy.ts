@@ -8,7 +8,7 @@ const PUBLIC_PATHS = [
   "/manifest.webmanifest",
 ];
 
-export function middleware(request: NextRequest) {
+export function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
   if (
@@ -38,7 +38,5 @@ export function middleware(request: NextRequest) {
 }
 
 export const config = {
-  // 匹配所有路径，具体放行逻辑在上面的代码里处理
   matcher: ["/(.*)"],
 };
-
