@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { use, useEffect, useMemo, useState } from "react";
 import { StarIcon } from "@/components/StarIcon";
+import * as taskCache from "@/lib/taskCache";
 
 type Progress = {
   id: string;
@@ -216,8 +217,8 @@ export default function WeeklyTasksPage({ params }: WeeklyTasksPageProps) {
     return () => controller.abort();
   }, [categoryId, subCategoryId]);
 
-  const loadTasks = async () => {
-    setLoading(true);
+  const loadTasks = async (showLoading = true) => {
+    if (showLoading) setLoading(true);
     try {
       const url = `/api/tasks?subCategoryId=${encodeURIComponent(
         subCategoryId,
@@ -226,17 +227,28 @@ export default function WeeklyTasksPage({ params }: WeeklyTasksPageProps) {
       if (!res.ok) return;
       const data: Task[] = await res.json();
       setTasks(data);
+      await taskCache.setTasks(subCategoryId, weekInfo.start, data);
     } catch (error) {
       console.error(error);
     } finally {
-      setLoading(false);
+      if (showLoading) setLoading(false);
     }
+  };
+
+  const persistTasks = (data: Task[]) => {
+    void taskCache.setTasks(subCategoryId, weekInfo.start, data);
   };
 
   useEffect(() => {
     const controller = new AbortController();
     const load = async () => {
-      setLoading(true);
+      const cached = await taskCache.getTasks(subCategoryId, weekInfo.start);
+      if (cached !== null) {
+        setTasks(cached);
+        setLoading(false);
+      } else {
+        setLoading(true);
+      }
       try {
         const url = `/api/tasks?subCategoryId=${encodeURIComponent(
           subCategoryId,
@@ -245,6 +257,7 @@ export default function WeeklyTasksPage({ params }: WeeklyTasksPageProps) {
         if (!res.ok) return;
         const data: Task[] = await res.json();
         setTasks(data);
+        await taskCache.setTasks(subCategoryId, weekInfo.start, data);
       } catch (error) {
         if ((error as Error).name !== "AbortError") console.error(error);
       } finally {
@@ -349,11 +362,15 @@ export default function WeeklyTasksPage({ params }: WeeklyTasksPageProps) {
 
   const handleToggleCompleted = async (task: Task) => {
     const nextCompleted = !task.isCompleted;
-    setTasks((prev) =>
-      prev.map((t) =>
+    let nextTasks: Task[] = [];
+    setTasks((prev) => {
+      nextTasks = prev.map((t) =>
         t.id === task.id ? { ...t, isCompleted: nextCompleted } : t,
-      ),
-    );
+      );
+      return nextTasks;
+    });
+    persistTasks(nextTasks);
+    if (task.id.startsWith("temp_")) return;
     try {
       await fetch(`/api/tasks/${task.id}`, {
         method: "PUT",
@@ -362,6 +379,9 @@ export default function WeeklyTasksPage({ params }: WeeklyTasksPageProps) {
       });
     } catch (error) {
       console.error(error);
+      setSaveToast("同步失败");
+      setTimeout(() => setSaveToast(null), 3000);
+      void loadTasks(false);
     }
   };
 
@@ -395,14 +415,18 @@ export default function WeeklyTasksPage({ params }: WeeklyTasksPageProps) {
     if (!editTask) return;
     const trimmed = editContent.trim();
     if (!trimmed) return;
-    setTasks((prev) =>
-      prev.map((t) =>
+    let nextTasks: Task[] = [];
+    setTasks((prev) => {
+      nextTasks = prev.map((t) =>
         t.id === editTask.id
           ? { ...t, content: trimmed, description: editDescription }
           : t,
-      ),
-    );
+      );
+      return nextTasks;
+    });
     setEditTask(null);
+    persistTasks(nextTasks);
+    if (editTask.id.startsWith("temp_")) return;
     try {
       const res = await fetch(`/api/tasks/${editTask.id}`, {
         method: "PUT",
@@ -413,35 +437,53 @@ export default function WeeklyTasksPage({ params }: WeeklyTasksPageProps) {
         }),
       });
       if (!res.ok) throw new Error("保存失败");
-      await loadTasks();
     } catch (err) {
       setSaveToast(err instanceof Error ? err.message : "保存失败，正在刷新");
       setTimeout(() => setSaveToast(null), 3000);
-      await loadTasks();
+      void loadTasks(false);
     }
   };
 
   const handleDeleteTask = async (taskId: string) => {
+    const prevTasks = tasks.filter((t) => t.id !== taskId);
+    setTasks(prevTasks);
+    setDeleteConfirm(null);
+    setExpandedTaskIds((prev) => {
+      const next = new Set(prev);
+      next.delete(taskId);
+      return next;
+    });
+    persistTasks(prevTasks);
+    if (taskId.startsWith("temp_")) return;
     try {
       const res = await fetch(`/api/tasks/${taskId}`, { method: "DELETE" });
-      if (!res.ok) return;
-      setTasks((prev) => prev.filter((t) => t.id !== taskId));
-      setDeleteConfirm(null);
-      setExpandedTaskIds((prev) => {
-        const next = new Set(prev);
-        next.delete(taskId);
-        return next;
-      });
+      if (!res.ok) throw new Error("删除失败");
     } catch (err) {
-      console.error(err);
+      setSaveToast(err instanceof Error ? err.message : "删除失败");
+      setTimeout(() => setSaveToast(null), 3000);
+      void loadTasks(false);
     }
   };
 
   const handleAddTask = async () => {
     const content = newTask.trim();
     if (!content) return;
+    const tempId = `temp_${Date.now()}_${Math.random().toString(36).slice(2)}`;
+    const tempTask: Task = {
+      id: tempId,
+      content,
+      description: "",
+      isCompleted: false,
+      weekStart: weekInfo.start,
+      subTasks: [],
+    };
+    setTasks((prev) => {
+      const next = [...prev, tempTask];
+      persistTasks(next);
+      return next;
+    });
+    setNewTask("");
     setAddTaskLoading(true);
-    setLoading(true);
     try {
       const res = await fetch("/api/tasks", {
         method: "POST",
@@ -453,24 +495,60 @@ export default function WeeklyTasksPage({ params }: WeeklyTasksPageProps) {
         }),
       });
       if (!res.ok) throw new Error("添加失败");
-      setNewTask("");
-      await loadTasks();
+      const created: Task = await res.json();
+      setTasks((prev) => {
+        const next = prev.map((t) => (t.id === tempId ? created : t));
+        persistTasks(next);
+        return next;
+      });
     } catch (error) {
       setSaveToast(error instanceof Error ? error.message : "添加失败");
       setTimeout(() => setSaveToast(null), 3000);
-      await loadTasks();
+      setTasks((prev) => {
+        const next = prev.filter((t) => t.id !== tempId);
+        persistTasks(next);
+        return next;
+      });
+      void loadTasks(false);
     } finally {
       setAddTaskLoading(false);
-      setLoading(false);
     }
   };
 
   const handleAddSubTask = async (taskId: string) => {
     const content = newSubTaskContent.trim();
     if (!content) return;
+    const tempId = `temp_${Date.now()}_${Math.random().toString(36).slice(2)}`;
+    const tempSubTask: SubTask = {
+      id: tempId,
+      taskId,
+      content,
+      description: newSubTaskDesc,
+      assignee: newSubTaskAssignee.trim(),
+      isCompleted: false,
+      isPriority: newSubTaskPriority,
+      sortOrder: 0,
+      dueDate: newSubTaskDueDate.trim() || null,
+      progress: [],
+    };
     setAddSubTaskLoading(taskId);
     setNewSubTaskId(null);
-    setLoading(true);
+    setNewSubTaskContent("");
+    setNewSubTaskDesc("");
+    setNewSubTaskAssignee("");
+    setNewSubTaskPriority(false);
+    setTasks((prev) => {
+      const next = prev.map((t) =>
+        t.id === taskId
+          ? {
+              ...t,
+              subTasks: [...t.subTasks, { ...tempSubTask, progress: [] }],
+            }
+          : t,
+      );
+      persistTasks(next);
+      return next;
+    });
     try {
       const res = await fetch(`/api/tasks/${taskId}/sub-tasks`, {
         method: "POST",
@@ -484,26 +562,48 @@ export default function WeeklyTasksPage({ params }: WeeklyTasksPageProps) {
         }),
       });
       if (!res.ok) throw new Error("添加失败");
-      setNewSubTaskContent("");
-      setNewSubTaskDesc("");
-      setNewSubTaskAssignee("");
-      setNewSubTaskPriority(false);
-      await loadTasks();
+      const created = (await res.json()) as SubTask;
+      setTasks((prev) => {
+        const next = prev.map((t) =>
+          t.id === taskId
+            ? {
+                ...t,
+                subTasks: t.subTasks.map((s) =>
+                  s.id === tempId ? { ...created, progress: created.progress ?? [] } : s,
+                ),
+              }
+            : t,
+        );
+        persistTasks(next);
+        return next;
+      });
     } catch (error) {
       setSaveToast(error instanceof Error ? error.message : "添加失败");
       setTimeout(() => setSaveToast(null), 3000);
       setNewSubTaskId(taskId);
-      await loadTasks();
+      setTasks((prev) => {
+        const next = prev.map((t) =>
+          t.id === taskId
+            ? {
+                ...t,
+                subTasks: t.subTasks.filter((s) => s.id !== tempId),
+              }
+            : t,
+        );
+        persistTasks(next);
+        return next;
+      });
+      void loadTasks(false);
     } finally {
       setAddSubTaskLoading(null);
-      setLoading(false);
     }
   };
 
   const handleToggleSubTaskCompleted = async (taskId: string, st: SubTask) => {
     const nextCompleted = !st.isCompleted;
-    setTasks((prev) =>
-      prev.map((t) =>
+    let nextTasks: Task[] = [];
+    setTasks((prev) => {
+      nextTasks = prev.map((t) =>
         t.id === taskId
           ? {
               ...t,
@@ -512,8 +612,11 @@ export default function WeeklyTasksPage({ params }: WeeklyTasksPageProps) {
               ),
             }
           : t,
-      ),
-    );
+      );
+      return nextTasks;
+    });
+    persistTasks(nextTasks);
+    if (st.id.startsWith("temp_")) return;
     try {
       await fetch(`/api/sub-tasks/${st.id}`, {
         method: "PUT",
@@ -522,13 +625,17 @@ export default function WeeklyTasksPage({ params }: WeeklyTasksPageProps) {
       });
     } catch (error) {
       console.error(error);
+      setSaveToast("同步失败");
+      setTimeout(() => setSaveToast(null), 3000);
+      void loadTasks(false);
     }
   };
 
   const handleToggleSubTaskPriority = async (taskId: string, st: SubTask) => {
     const nextPriority = !st.isPriority;
-    setTasks((prev) =>
-      prev.map((t) =>
+    let nextTasks: Task[] = [];
+    setTasks((prev) => {
+      nextTasks = prev.map((t) =>
         t.id === taskId
           ? {
               ...t,
@@ -537,8 +644,11 @@ export default function WeeklyTasksPage({ params }: WeeklyTasksPageProps) {
               ),
             }
           : t,
-      ),
-    );
+      );
+      return nextTasks;
+    });
+    persistTasks(nextTasks);
+    if (st.id.startsWith("temp_")) return;
     try {
       await fetch(`/api/sub-tasks/${st.id}`, {
         method: "PUT",
@@ -547,6 +657,9 @@ export default function WeeklyTasksPage({ params }: WeeklyTasksPageProps) {
       });
     } catch (error) {
       console.error(error);
+      setSaveToast("同步失败");
+      setTimeout(() => setSaveToast(null), 3000);
+      void loadTasks(false);
     }
   };
 
@@ -564,8 +677,9 @@ export default function WeeklyTasksPage({ params }: WeeklyTasksPageProps) {
     if (!editSubTask) return;
     const trimmed = editSubTaskContent.trim();
     if (!trimmed) return;
-    setTasks((prev) =>
-      prev.map((t) =>
+    let nextTasks: Task[] = [];
+    setTasks((prev) => {
+      nextTasks = prev.map((t) =>
         t.id === editSubTask.taskId
           ? {
               ...t,
@@ -583,9 +697,12 @@ export default function WeeklyTasksPage({ params }: WeeklyTasksPageProps) {
               ),
             }
           : t,
-      ),
-    );
+      );
+      return nextTasks;
+    });
     setEditSubTask(null);
+    persistTasks(nextTasks);
+    if (editSubTask.id.startsWith("temp_")) return;
     try {
       const res = await fetch(`/api/sub-tasks/${editSubTask.id}`, {
         method: "PUT",
@@ -599,38 +716,43 @@ export default function WeeklyTasksPage({ params }: WeeklyTasksPageProps) {
         }),
       });
       if (!res.ok) throw new Error("保存失败");
-      await loadTasks();
     } catch (err) {
       setSaveToast(err instanceof Error ? err.message : "保存失败，正在刷新");
       setTimeout(() => setSaveToast(null), 3000);
-      await loadTasks();
+      void loadTasks(false);
     }
   };
 
   const handleDeleteSubTask = async (taskId: string, subTaskId: string) => {
+    let nextTasks: Task[] = [];
+    setTasks((prev) => {
+      nextTasks = prev.map((t) =>
+        t.id === taskId
+          ? {
+              ...t,
+              subTasks: t.subTasks.filter((s) => s.id !== subTaskId),
+            }
+          : t,
+      );
+      return nextTasks;
+    });
+    setDeleteSubTaskConfirm(null);
+    setExpandedSubTaskIds((prev) => {
+      const next = new Set(prev);
+      next.delete(subTaskId);
+      return next;
+    });
+    persistTasks(nextTasks);
+    if (subTaskId.startsWith("temp_")) return;
     try {
       const res = await fetch(`/api/sub-tasks/${subTaskId}`, {
         method: "DELETE",
       });
-      if (!res.ok) return;
-      setTasks((prev) =>
-        prev.map((t) =>
-          t.id === taskId
-            ? {
-                ...t,
-                subTasks: t.subTasks.filter((s) => s.id !== subTaskId),
-              }
-            : t,
-        ),
-      );
-      setDeleteSubTaskConfirm(null);
-      setExpandedSubTaskIds((prev) => {
-        const next = new Set(prev);
-        next.delete(subTaskId);
-        return next;
-      });
+      if (!res.ok) throw new Error("删除失败");
     } catch (err) {
-      console.error(err);
+      setSaveToast(err instanceof Error ? err.message : "删除失败");
+      setTimeout(() => setSaveToast(null), 3000);
+      void loadTasks(false);
     }
   };
 
@@ -689,12 +811,46 @@ export default function WeeklyTasksPage({ params }: WeeklyTasksPageProps) {
   }, [tasks, expandedTaskIds, expandedSubTaskIds]);
 
   const handleAddProgress = async (taskId: string, subTaskId: string) => {
+    if (subTaskId.startsWith("temp_")) return;
     const content = newProgressContent.trim();
     if (!content) return;
+    const tempId = `temp_${Date.now()}_${Math.random().toString(36).slice(2)}`;
+    const tempProgress: Progress = {
+      id: tempId,
+      subTaskId,
+      content,
+      assignee: newProgressAssignee.trim(),
+      isPriority: newProgressPriority,
+      isCompleted: false,
+      dueDate: newProgressDueDate.trim() || null,
+      sortOrder: 0,
+    };
     const key = `${taskId}-${subTaskId}`;
     setAddProgressLoading(key);
     setNewProgressSubTaskId(null);
-    setLoading(true);
+    setNewProgressContent("");
+    setNewProgressAssignee("");
+    setNewProgressPriority(false);
+    setNewProgressDueDate("");
+    setTasks((prev) => {
+      const next = prev.map((t) =>
+        t.id === taskId
+          ? {
+              ...t,
+              subTasks: t.subTasks.map((s) =>
+                s.id === subTaskId
+                  ? {
+                      ...s,
+                      progress: [...(s.progress ?? []), tempProgress],
+                    }
+                  : s,
+              ),
+            }
+          : t,
+      );
+      persistTasks(next);
+      return next;
+    });
     try {
       const res = await fetch(`/api/sub-tasks/${subTaskId}/progress`, {
         method: "POST",
@@ -707,19 +863,54 @@ export default function WeeklyTasksPage({ params }: WeeklyTasksPageProps) {
         }),
       });
       if (!res.ok) throw new Error("添加失败");
-      setNewProgressContent("");
-      setNewProgressAssignee("");
-      setNewProgressPriority(false);
-      setNewProgressDueDate("");
-      await loadTasks();
+      const created = (await res.json()) as Progress;
+      setTasks((prev) => {
+        const next = prev.map((t) =>
+          t.id === taskId
+            ? {
+                ...t,
+                subTasks: t.subTasks.map((s) =>
+                  s.id === subTaskId
+                    ? {
+                        ...s,
+                        progress: (s.progress ?? []).map((p) =>
+                          p.id === tempId ? created : p,
+                        ),
+                      }
+                    : s,
+                ),
+              }
+            : t,
+        );
+        persistTasks(next);
+        return next;
+      });
     } catch (err) {
       setSaveToast(err instanceof Error ? err.message : "添加失败");
       setTimeout(() => setSaveToast(null), 3000);
       setNewProgressSubTaskId(subTaskId);
-      await loadTasks();
+      setTasks((prev) => {
+        const next = prev.map((t) =>
+          t.id === taskId
+            ? {
+                ...t,
+                subTasks: t.subTasks.map((s) =>
+                  s.id === subTaskId
+                    ? {
+                        ...s,
+                        progress: (s.progress ?? []).filter((p) => p.id !== tempId),
+                      }
+                    : s,
+                ),
+              }
+            : t,
+        );
+        persistTasks(next);
+        return next;
+      });
+      void loadTasks(false);
     } finally {
       setAddProgressLoading(null);
-      setLoading(false);
     }
   };
 
@@ -729,8 +920,9 @@ export default function WeeklyTasksPage({ params }: WeeklyTasksPageProps) {
     p: Progress,
   ) => {
     const nextPriority = !p.isPriority;
-    setTasks((prev) =>
-      prev.map((t) =>
+    let nextTasks: Task[] = [];
+    setTasks((prev) => {
+      nextTasks = prev.map((t) =>
         t.id === taskId
           ? {
               ...t,
@@ -746,8 +938,11 @@ export default function WeeklyTasksPage({ params }: WeeklyTasksPageProps) {
               ),
             }
           : t,
-      ),
-    );
+      );
+      return nextTasks;
+    });
+    persistTasks(nextTasks);
+    if (p.id.startsWith("temp_")) return;
     try {
       await fetch(`/api/progress/${p.id}`, {
         method: "PUT",
@@ -756,6 +951,9 @@ export default function WeeklyTasksPage({ params }: WeeklyTasksPageProps) {
       });
     } catch (err) {
       console.error(err);
+      setSaveToast("同步失败");
+      setTimeout(() => setSaveToast(null), 3000);
+      void loadTasks(false);
     }
   };
 
@@ -778,9 +976,10 @@ export default function WeeklyTasksPage({ params }: WeeklyTasksPageProps) {
     const subTask = task?.subTasks.find((s) =>
       s.progress?.some((p) => p.id === editProgress.id),
     );
+    let nextTasks: Task[] = [];
     if (task && subTask) {
-      setTasks((prev) =>
-        prev.map((t) =>
+      setTasks((prev) => {
+        nextTasks = prev.map((t) =>
           t.id === task.id
             ? {
                 ...t,
@@ -804,10 +1003,13 @@ export default function WeeklyTasksPage({ params }: WeeklyTasksPageProps) {
                 ),
               }
             : t,
-        ),
-      );
+        );
+        return nextTasks;
+      });
+      persistTasks(nextTasks);
     }
     setEditProgress(null);
+    if (editProgress.id.startsWith("temp_")) return;
     try {
       const res = await fetch(`/api/progress/${editProgress.id}`, {
         method: "PUT",
@@ -820,42 +1022,47 @@ export default function WeeklyTasksPage({ params }: WeeklyTasksPageProps) {
         }),
       });
       if (!res.ok) throw new Error("保存失败");
-      await loadTasks();
     } catch (err) {
       setSaveToast(err instanceof Error ? err.message : "保存失败，正在刷新");
       setTimeout(() => setSaveToast(null), 3000);
-      await loadTasks();
+      void loadTasks(false);
     }
   };
 
   const handleDeleteProgress = async () => {
     if (!deleteProgressConfirm) return;
     const { id: progressId, taskId, subTaskId } = deleteProgressConfirm;
+    let nextTasks: Task[] = [];
+    setTasks((prev) => {
+      nextTasks = prev.map((t) =>
+        t.id === taskId
+          ? {
+              ...t,
+              subTasks: t.subTasks.map((s) =>
+                s.id === subTaskId
+                  ? {
+                      ...s,
+                      progress: (s.progress ?? []).filter((p) => p.id !== progressId),
+                    }
+                  : s,
+              ),
+            }
+          : t,
+      );
+      return nextTasks;
+    });
+    setDeleteProgressConfirm(null);
+    persistTasks(nextTasks);
+    if (progressId.startsWith("temp_")) return;
     try {
       const res = await fetch(`/api/progress/${progressId}`, {
         method: "DELETE",
       });
-      if (!res.ok) return;
-      setTasks((prev) =>
-        prev.map((t) =>
-          t.id === taskId
-            ? {
-                ...t,
-                subTasks: t.subTasks.map((s) =>
-                  s.id === subTaskId
-                    ? {
-                        ...s,
-                        progress: (s.progress ?? []).filter((p) => p.id !== progressId),
-                      }
-                    : s,
-                ),
-              }
-            : t,
-        ),
-      );
-      setDeleteProgressConfirm(null);
+      if (!res.ok) throw new Error("删除失败");
     } catch (err) {
-      console.error(err);
+      setSaveToast(err instanceof Error ? err.message : "删除失败");
+      setTimeout(() => setSaveToast(null), 3000);
+      void loadTasks(false);
     }
   };
 
@@ -950,8 +1157,9 @@ export default function WeeklyTasksPage({ params }: WeeklyTasksPageProps) {
     p: Progress,
   ) => {
     const nextCompleted = !p.isCompleted;
-    setTasks((prev) =>
-      prev.map((t) =>
+    let nextTasks: Task[] = [];
+    setTasks((prev) => {
+      nextTasks = prev.map((t) =>
         t.id === taskId
           ? {
               ...t,
@@ -967,8 +1175,11 @@ export default function WeeklyTasksPage({ params }: WeeklyTasksPageProps) {
               ),
             }
           : t,
-      ),
-    );
+      );
+      return nextTasks;
+    });
+    persistTasks(nextTasks);
+    if (p.id.startsWith("temp_")) return;
     try {
       await fetch(`/api/progress/${p.id}`, {
         method: "PUT",
@@ -977,6 +1188,9 @@ export default function WeeklyTasksPage({ params }: WeeklyTasksPageProps) {
       });
     } catch (err) {
       console.error(err);
+      setSaveToast("同步失败");
+      setTimeout(() => setSaveToast(null), 3000);
+      void loadTasks(false);
     }
   };
 

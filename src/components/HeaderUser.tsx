@@ -1,12 +1,14 @@
 "use client";
 
 import { useRouter } from "next/navigation";
+import * as taskCache from "@/lib/taskCache";
 
 export function HeaderUser() {
   const router = useRouter();
 
   const handleLogout = async () => {
     await fetch("/api/auth/logout", { method: "POST" });
+    taskCache.clearTasks();
     router.push("/login");
     router.refresh();
   };
