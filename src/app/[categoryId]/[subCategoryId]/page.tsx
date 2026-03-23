@@ -1341,23 +1341,20 @@ export default function WeeklyTasksPage({ params }: WeeklyTasksPageProps) {
 
       <div className="card space-y-3 px-4 py-4">
         {loading ? (
-          <div className="space-y-3 py-2 animate-in">
+          <div className="space-y-2 py-2 animate-in">
             {[1, 2, 3, 4].map((i) => (
               <div
                 key={i}
-                className="flex items-center gap-3 rounded-lg border border-slate-100 bg-slate-50 px-3 py-3"
+                className="flex items-center gap-2 border-b border-slate-100 py-2 last:border-0"
                 style={{ animationDelay: `${i * 80}ms` }}
               >
-                <div className="h-4 w-4 shrink-0 rounded border border-slate-200 skeleton" />
-                <div className="min-w-0 flex-1 space-y-2">
-                  <div className="h-4 w-16 skeleton rounded" />
+                <div className="h-4 w-4 shrink-0 skeleton" />
+                <div className="min-w-0 flex-1 space-y-1.5">
                   <div className="h-3 w-24 skeleton rounded" />
+                  <div className="h-2.5 w-32 skeleton rounded" />
                 </div>
               </div>
             ))}
-            <div className="flex justify-center pt-2">
-              <div className="h-3 w-20 skeleton rounded" />
-            </div>
           </div>
         ) : displayTasks.length === 0 ? (
           <div className="flex flex-col items-center justify-center gap-3 py-8 text-center animate-in">
@@ -1372,34 +1369,23 @@ export default function WeeklyTasksPage({ params }: WeeklyTasksPageProps) {
             </div>
           </div>
         ) : (
-          <ul className="space-y-2">
+          <ul className="text-sm">
             {displayTasks.map((task) => (
-              <li
-                key={task.id}
-                className={`overflow-hidden rounded-lg border transition-all duration-200 ${
-                  expandedTaskIds.has(task.id)
-                    ? "border-primary/25 bg-white shadow-md"
-                    : "border-slate-100 bg-slate-50 hover:shadow-sm"
-                }`}
-              >
-                <div className="flex items-center justify-between px-3 py-2.5">
-                  <div className="flex flex-1 items-center gap-2">
+              <li key={task.id} className="border-b border-slate-100 py-2 last:border-b-0">
+                <div className="flex items-start justify-between gap-2">
+                  <div className="flex min-w-0 flex-1 items-start gap-1.5">
                     <button
                       type="button"
                       onClick={() => toggleExpand(task)}
-                      className={`flex h-6 w-6 shrink-0 items-center justify-center rounded transition-colors ${
-                        expandedTaskIds.has(task.id)
-                          ? "bg-primary/15 text-primary"
-                          : "bg-slate-100 text-slate-500 hover:bg-slate-200 hover:text-slate-700"
-                      }`}
+                      className="mt-0.5 shrink-0 w-5 text-left text-xs text-slate-500 hover:text-slate-800"
                       title={expandedTaskIds.has(task.id) ? "收起" : "展开"}
                     >
                       <span
-                        className={`inline-block text-xs transition-transform duration-200 ${
-                          expandedTaskIds.has(task.id) ? "rotate-0" : "-rotate-90"
+                        className={`inline-block transition-transform duration-150 ${
+                          expandedTaskIds.has(task.id) ? "rotate-90" : "rotate-0"
                         }`}
                       >
-                        ▼
+                        ▶
                       </span>
                     </button>
                     <button
@@ -1440,7 +1426,7 @@ export default function WeeklyTasksPage({ params }: WeeklyTasksPageProps) {
                           {task.description}
                         </span>
                       )}
-                      <span className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-slate-400">
+                      <span className="mt-0.5 block text-xs text-slate-500">
                         {(() => {
                           const {
                             total,
@@ -1449,36 +1435,26 @@ export default function WeeklyTasksPage({ params }: WeeklyTasksPageProps) {
                             unimportantPending,
                           } = getTaskStats(task);
                           if (total === 0) {
-                            return (
-                              <span className="text-slate-400">暂无子任务</span>
-                            );
+                            return "暂无子任务";
                           }
-                          return (
-                            <>
-                              {importantPending > 0 && (
-                                <span className="inline-flex items-center rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-medium text-amber-800">
-                                  {importantPending} 高优先级未完成
-                                </span>
-                              )}
-                              {hasTaskDueDateOverdue(task) && (
-                                <span className="inline-flex items-center rounded-full bg-red-100 px-2 py-0.5 text-[11px] font-medium text-red-700">
-                                  逾期
-                                </span>
-                              )}
-                              {hasTaskDueDateUrgent(task) &&
-                                !hasTaskDueDateOverdue(task) && (
-                                  <span className="inline-flex items-center rounded-full bg-orange-100 px-2 py-0.5 text-[11px] font-medium text-orange-700">
-                                    临期
-                                  </span>
-                                )}
-                              {unimportantPending > 0 && (
-                                <span>{unimportantPending} 普通未完成</span>
-                              )}
-                              {completed > 0 && (
-                                <span>{completed} 已完成</span>
-                              )}
-                            </>
-                          );
+                          const parts: string[] = [];
+                          if (importantPending > 0) {
+                            parts.push(`${importantPending} 高优未完成`);
+                          }
+                          if (hasTaskDueDateOverdue(task)) {
+                            parts.push("含逾期");
+                          } else if (
+                            hasTaskDueDateUrgent(task)
+                          ) {
+                            parts.push("含临期");
+                          }
+                          if (unimportantPending > 0) {
+                            parts.push(`${unimportantPending} 普通未完成`);
+                          }
+                          if (completed > 0) {
+                            parts.push(`${completed} 已完成`);
+                          }
+                          return parts.join(" · ");
                         })()}
                       </span>
                     </button>
@@ -1503,44 +1479,27 @@ export default function WeeklyTasksPage({ params }: WeeklyTasksPageProps) {
                   </div>
                 </div>
                 {expandedTaskIds.has(task.id) && (
-                  <div className="animate-slide-down border-l-4 border-l-primary/40 border-t border-slate-100 bg-slate-50/50 px-3 py-3">
-                    <div className="space-y-2">
-                      <div className="flex items-center gap-2 text-xs font-medium text-slate-600">
-                        <span className="h-px flex-1 bg-slate-200" />
-                        <span>子任务</span>
-                        <span className="h-px flex-1 bg-slate-200" />
-                      </div>
-                      <ul className="space-y-1.5">
+                  <div className="mt-2 border-l border-slate-200 pl-3 ml-1">
+                    <ul className="space-y-1">
                         {sortedSubTasks(task.subTasks)
                           .filter((st) => !hideCompleted || !st.isCompleted)
                           .map((st) => (
-                          <li
-                            key={st.id}
-                            className={`overflow-hidden rounded-lg border transition-colors ${
-                              expandedSubTaskIds.has(st.id)
-                                ? "border-primary/30 bg-white shadow-sm"
-                                : "border-slate-100 bg-slate-50"
-                            }`}
-                          >
-                            <div className="flex items-center gap-2 px-2 py-1.5">
+                          <li key={st.id} className="py-0.5">
+                            <div className="flex items-start gap-1">
                               <button
                                 type="button"
                                 onClick={() => toggleSubTaskExpand(st)}
-                                className={`flex h-5 w-5 shrink-0 items-center justify-center rounded transition-colors ${
-                                  expandedSubTaskIds.has(st.id)
-                                    ? "bg-primary/15 text-primary"
-                                    : "bg-slate-100 text-slate-400 hover:bg-slate-200 hover:text-slate-600"
-                                }`}
+                                className="mt-0.5 shrink-0 w-4 text-left text-[10px] text-slate-500 hover:text-slate-800"
                                 title={expandedSubTaskIds.has(st.id) ? "收起进度" : "展开进度"}
                               >
                                 <span
-                                  className={`inline-block text-[10px] transition-transform duration-200 ${
+                                  className={`inline-block transition-transform duration-150 ${
                                     expandedSubTaskIds.has(st.id)
-                                      ? "rotate-0"
-                                      : "-rotate-90"
+                                      ? "rotate-90"
+                                      : "rotate-0"
                                   }`}
                                 >
-                                  ▼
+                                  ▶
                                 </span>
                               </button>
                               <button
@@ -1548,7 +1507,7 @@ export default function WeeklyTasksPage({ params }: WeeklyTasksPageProps) {
                                 onClick={() =>
                                   handleToggleSubTaskCompleted(task.id, st)
                                 }
-                                className="flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded border border-slate-300 bg-white text-[8px] text-primary"
+                                className="mt-0.5 flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded border border-slate-300 bg-white text-[8px] text-primary"
                               >
                                 {st.isCompleted ? "✓" : ""}
                               </button>
@@ -1561,23 +1520,23 @@ export default function WeeklyTasksPage({ params }: WeeklyTasksPageProps) {
                                   className={`text-sm ${
                                     st.isCompleted
                                       ? "line-through text-slate-400"
-                                      : "text-slate-700"
+                                      : "text-slate-800"
                                   }`}
                                 >
                                   {st.content}
                                   {isEffectivePriority(st) ? (
-                                    <span className="ml-1.5 shrink-0 rounded-full bg-amber-100 px-1.5 py-0.5 text-[10px] font-medium text-amber-700">
-                                      高优先级
+                                    <span className="ml-1 text-xs text-amber-700">
+                                      [高优]
                                     </span>
                                   ) : null}
                                   {isEffectiveDueDateOverdue(st) && (
-                                    <span className="ml-1.5 shrink-0 rounded-full bg-red-100 px-1.5 py-0.5 text-[10px] font-medium text-red-700">
+                                    <span className="ml-1 text-xs text-red-600">
                                       逾期
                                     </span>
                                   )}
                                   {isEffectiveDueDateUrgent(st) &&
                                     !isEffectiveDueDateOverdue(st) && (
-                                      <span className="ml-1.5 shrink-0 rounded-full bg-orange-100 px-1.5 py-0.5 text-[10px] font-medium text-orange-700">
+                                      <span className="ml-1 text-xs text-orange-700">
                                         临期
                                       </span>
                                     )}
@@ -1604,7 +1563,7 @@ export default function WeeklyTasksPage({ params }: WeeklyTasksPageProps) {
                                   </div>
                                 )}
                               </button>
-                              <div className="flex shrink-0 gap-1">
+                              <div className="flex shrink-0 gap-0.5">
                                 <button
                                   type="button"
                                   onClick={() =>
@@ -1640,19 +1599,14 @@ export default function WeeklyTasksPage({ params }: WeeklyTasksPageProps) {
                               </div>
                             </div>
                             {expandedSubTaskIds.has(st.id) && (
-                              <div className="animate-slide-down border-l-2 border-l-primary/30 border-t border-slate-100 bg-slate-50/80 px-2 py-2">
-                                <div className="mb-1.5 flex items-center gap-2 text-xs font-medium text-slate-600">
-                                  <span className="h-px flex-1 bg-slate-200" />
-                                  <span>进度</span>
-                                  <span className="h-px flex-1 bg-slate-200" />
-                                </div>
-                                <ul className="space-y-1">
+                              <div className="mt-1 border-l border-slate-200 pl-3 ml-4">
+                                <ul className="space-y-0.5">
                                   {sortedProgress(st.progress ?? [])
                                     .filter((p) => !hideCompleted || !p.isCompleted)
                                     .map((p) => (
                                     <li
                                       key={p.id}
-                                      className="flex items-center gap-2 rounded border border-slate-100 bg-slate-50/80 px-2 py-1.5"
+                                      className="flex items-start gap-2 py-0.5 text-xs"
                                     >
                                       <button
                                         type="button"
@@ -1663,33 +1617,33 @@ export default function WeeklyTasksPage({ params }: WeeklyTasksPageProps) {
                                             p,
                                           )
                                         }
-                                        className="flex h-3 w-3 shrink-0 items-center justify-center rounded border border-slate-300 bg-white text-[8px] text-primary"
+                                        className="mt-0.5 flex h-3 w-3 shrink-0 items-center justify-center rounded border border-slate-300 bg-white text-[8px] text-primary"
                                       >
                                         {p.isCompleted ? "✓" : ""}
                                       </button>
                                       <div className="min-w-0 flex-1">
                                         <span
-                                          className={`text-xs ${
+                                          className={
                                             p.isCompleted
                                               ? "line-through text-slate-400"
                                               : "text-slate-700"
-                                          }`}
+                                          }
                                         >
                                           {p.content}
                                           {p.isPriority && (
-                                            <span className="ml-1 rounded-full bg-amber-100 px-1 py-0.5 text-[10px] font-medium text-amber-700">
-                                              高优先级
+                                            <span className="ml-1 text-amber-700">
+                                              [高优]
                                             </span>
                                           )}
                                           {!p.isCompleted &&
                                             getDueDateStatus(p.dueDate) === "urgent" && (
-                                              <span className="ml-1 rounded-full bg-orange-100 px-1 py-0.5 text-[10px] font-medium text-orange-700">
+                                              <span className="ml-1 text-orange-700">
                                                 临期
                                               </span>
                                             )}
                                           {!p.isCompleted &&
                                             getDueDateStatus(p.dueDate) === "overdue" && (
-                                              <span className="ml-1 rounded-full bg-red-100 px-1 py-0.5 text-[10px] font-medium text-red-700">
+                                              <span className="ml-1 text-red-600">
                                                 逾期
                                               </span>
                                             )}
@@ -1751,7 +1705,7 @@ export default function WeeklyTasksPage({ params }: WeeklyTasksPageProps) {
                                   ))}
                                 </ul>
                                 {newProgressSubTaskId === st.id ? (
-                                  <div className="mt-2 space-y-1.5 rounded border border-slate-200 bg-slate-50/80 p-2">
+                                  <div className="mt-2 space-y-1.5 border border-slate-200 p-2">
                                     <input
                                       type="text"
                                       value={newProgressContent}
@@ -1845,7 +1799,7 @@ export default function WeeklyTasksPage({ params }: WeeklyTasksPageProps) {
                                       addProgressLoading ===
                                       `${task.id}-${st.id}`
                                     }
-                                    className="mt-2 rounded border border-dashed border-slate-200 px-2 py-1 text-[10px] text-slate-500 hover:border-slate-300 hover:bg-slate-50 disabled:opacity-70"
+                                    className="mt-2 text-left text-xs text-slate-500 hover:text-slate-800 disabled:opacity-70"
                                   >
                                     {addProgressLoading ===
                                     `${task.id}-${st.id}` ? (
@@ -1864,7 +1818,7 @@ export default function WeeklyTasksPage({ params }: WeeklyTasksPageProps) {
                           ))}
                         </ul>
                         {newSubTaskId === task.id ? (
-                          <div className="space-y-2 rounded-lg border border-slate-200 bg-slate-50 p-2">
+                          <div className="mt-2 space-y-2 border border-slate-200 p-2">
                             <input
                               type="text"
                               value={newSubTaskContent}
@@ -1872,7 +1826,7 @@ export default function WeeklyTasksPage({ params }: WeeklyTasksPageProps) {
                                 setNewSubTaskContent(e.target.value)
                               }
                               placeholder="子任务内容"
-                              className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none focus:border-primary focus:ring-1 focus:ring-primary"
+                              className="input-base w-full"
                             />
                             <input
                               type="text"
@@ -1881,7 +1835,7 @@ export default function WeeklyTasksPage({ params }: WeeklyTasksPageProps) {
                                 setNewSubTaskAssignee(e.target.value)
                               }
                               placeholder="对接人"
-                              className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none focus:border-primary focus:ring-1 focus:ring-primary"
+                              className="input-base w-full"
                             />
                             <textarea
                               value={newSubTaskDesc}
@@ -1890,7 +1844,7 @@ export default function WeeklyTasksPage({ params }: WeeklyTasksPageProps) {
                               }
                               placeholder="描述"
                               rows={2}
-                              className="w-full resize-none rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none focus:border-primary focus:ring-1 focus:ring-primary"
+                              className="input-base w-full resize-none"
                             />
                             <div>
                               <label className="mb-1 block text-xs text-slate-500">
@@ -1958,7 +1912,7 @@ export default function WeeklyTasksPage({ params }: WeeklyTasksPageProps) {
                             type="button"
                             onClick={() => setNewSubTaskId(task.id)}
                             disabled={addSubTaskLoading === task.id}
-                            className="rounded-lg border border-dashed border-slate-200 px-3 py-2 text-xs text-slate-500 hover:border-slate-300 hover:bg-slate-50 disabled:opacity-70"
+                            className="mt-1 text-left text-xs text-slate-500 hover:text-slate-800 disabled:opacity-70"
                           >
                             {addSubTaskLoading === task.id ? (
                               <span className="inline-flex items-center gap-1.5">
@@ -1970,8 +1924,7 @@ export default function WeeklyTasksPage({ params }: WeeklyTasksPageProps) {
                             )}
                           </button>
                         )}
-                      </div>
-                    </div>
+                  </div>
                 )}
               </li>
             ))}
@@ -2348,24 +2301,24 @@ export default function WeeklyTasksPage({ params }: WeeklyTasksPageProps) {
             </div>
             <span className="text-xs text-slate-500">{weekInfo.label}</span>
           </div>
-          <div className="space-y-3">
+          <ul className="space-y-2 text-sm">
             {completedSummary.map(({ task, hasTaskCompleted, subTaskGroups }) => (
-              <div
+              <li
                 key={task.id}
-                className="rounded-lg bg-slate-50/80 py-2"
+                className="border-b border-slate-100 pb-2 last:border-b-0"
               >
-                <div className="flex items-center justify-between gap-2 px-2 py-1">
+                <div className="flex items-center justify-between gap-2">
                   <div className="flex min-w-0 flex-1 items-center gap-2">
                     {hasTaskCompleted && (
                       <>
-                        <span className="shrink-0 text-primary">✓</span>
-                        <span className="text-sm font-medium text-slate-800">
+                        <span className="shrink-0 text-slate-500">✓</span>
+                        <span className="font-medium text-slate-800">
                           {task.content}
                         </span>
                       </>
                     )}
                     {!hasTaskCompleted && subTaskGroups.length > 0 && (
-                      <span className="text-sm font-medium text-slate-700">
+                      <span className="font-medium text-slate-700">
                         {task.content}
                       </span>
                     )}
@@ -2373,47 +2326,41 @@ export default function WeeklyTasksPage({ params }: WeeklyTasksPageProps) {
                   <button
                     type="button"
                     onClick={() => handleCopyTask(task.id)}
-                    className="shrink-0 rounded px-1.5 py-0.5 text-xs text-slate-500 hover:bg-slate-200 hover:text-slate-700"
+                    className="shrink-0 text-xs text-slate-500 hover:text-slate-800"
                     title="复制此项"
                   >
                     {copiedId === task.id ? "已复制" : "复制"}
                   </button>
                 </div>
                 {subTaskGroups.map(({ subTask, progress }) => (
-                  <div key={subTask.id} className="pl-4">
+                  <div key={subTask.id} className="mt-1 border-l border-slate-200 pl-3 ml-1">
                     {subTask.isCompleted && (
-                      <div className="flex items-center gap-2 px-2 py-0.5">
-                        <span className="shrink-0 text-[10px] text-primary">
-                          ✓
-                        </span>
-                        <span className="text-sm text-slate-600">
-                          {subTask.content}
-                        </span>
+                      <div className="flex items-center gap-2 py-0.5 text-slate-600">
+                        <span className="shrink-0 text-slate-500">✓</span>
+                        <span>{subTask.content}</span>
                       </div>
                     )}
                     {progress.length > 0 && !subTask.isCompleted && (
-                      <div className="px-2 py-0.5 text-sm font-medium text-slate-600">
+                      <div className="py-0.5 text-slate-700">
                         {subTask.content}
                       </div>
                     )}
-                    {progress.map((p) => (
-                      <div
-                        key={p.id}
-                        className="flex items-center gap-2 pl-6 pr-2 py-0.5"
-                      >
-                        <span className="shrink-0 text-[10px] text-primary">
-                          ✓
-                        </span>
-                        <span className="text-sm text-slate-600">
-                          {p.content}
-                        </span>
-                      </div>
-                    ))}
+                    <ul className="mt-0.5 space-y-0.5">
+                      {progress.map((p) => (
+                        <li
+                          key={p.id}
+                          className="flex items-center gap-2 py-0.5 pl-2 text-slate-600"
+                        >
+                          <span className="shrink-0 text-slate-500">✓</span>
+                          <span>{p.content}</span>
+                        </li>
+                      ))}
+                    </ul>
                   </div>
                 ))}
-              </div>
+              </li>
             ))}
-          </div>
+          </ul>
         </div>
       )}
     </div>
