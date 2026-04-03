@@ -35,6 +35,7 @@ type Task = {
   description: string;
   isCompleted: boolean;
   weekStart: string;
+  completedAt: string | null;
   subTasks: SubTask[];
 };
 
@@ -66,6 +67,9 @@ type TaskView = {
 interface WeeklyTasksPageProps {
   params: Promise<{ categoryId: string; subCategoryId: string }>;
 }
+
+const WEEK_STORAGE_KEY_PREFIX = "weekly-plan:selected-week:";
+const WEEK_START_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
 
 function getMondayOfWeek(d: Date): Date {
   const m = new Date(d);
@@ -140,6 +144,12 @@ function getDueDateStatus(dueDate: string | null) {
   if (diffDays < 0) return "overdue";
   if (diffDays <= 3) return "urgent";
   return null;
+}
+
+function isWithin24Hours(completedAt: string | null): boolean {
+  if (!completedAt) return false;
+  const diffMs = Date.now() - new Date(completedAt).getTime();
+  return diffMs < 24 * 60 * 60 * 1000;
 }
 
 function sortSubTasks(subTasks: SubTask[]): SubTask[] {
@@ -274,6 +284,7 @@ function buildTaskView(task: Task, hideCompleted: boolean, sortSubItems: boolean
 export default function WeeklyTasksPage({ params }: WeeklyTasksPageProps) {
   const { categoryId, subCategoryId } = use(params);
   const [selectedWeekStart, setSelectedWeekStart] = useState(getInitialWeekStart);
+  const [isWeekReady, setIsWeekReady] = useState(false);
   const [weekPickerOpen, setWeekPickerOpen] = useState(false);
   const [tasks, setTasks] = useState<Task[]>([]);
   const [loading, setLoading] = useState(true);
@@ -339,6 +350,12 @@ export default function WeeklyTasksPage({ params }: WeeklyTasksPageProps) {
   const weeksInYear = useMemo(() => getWeeksInYear(selectedYear), [selectedYear]);
 
   const selectWeekStart = (weekStart: string) => {
+    if (typeof window !== "undefined") {
+      window.localStorage.setItem(
+        `${WEEK_STORAGE_KEY_PREFIX}${subCategoryId}`,
+        weekStart,
+      );
+    }
     startTransition(() => {
       setSelectedWeekStart(weekStart);
     });
@@ -354,6 +371,26 @@ export default function WeeklyTasksPage({ params }: WeeklyTasksPageProps) {
     d.setDate(d.getDate() + 7);
     selectWeekStart(toDateString(d));
   };
+
+  useEffect(() => {
+    const storageKey = `${WEEK_STORAGE_KEY_PREFIX}${subCategoryId}`;
+    const currentWeekStart = getInitialWeekStart();
+    const savedWeekStart =
+      typeof window !== "undefined"
+        ? window.localStorage.getItem(storageKey)
+        : null;
+
+    if (savedWeekStart && WEEK_START_PATTERN.test(savedWeekStart)) {
+      setSelectedWeekStart(savedWeekStart);
+    } else {
+      setSelectedWeekStart(currentWeekStart);
+      if (typeof window !== "undefined") {
+        window.localStorage.setItem(storageKey, currentWeekStart);
+      }
+    }
+
+    setIsWeekReady(true);
+  }, [subCategoryId]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -402,6 +439,10 @@ export default function WeeklyTasksPage({ params }: WeeklyTasksPageProps) {
   };
 
   useEffect(() => {
+    if (!isWeekReady) {
+      return;
+    }
+
     const controller = new AbortController();
     const load = async () => {
       const cached = await taskCache.getTasks(subCategoryId, weekInfo.start);
@@ -428,7 +469,7 @@ export default function WeeklyTasksPage({ params }: WeeklyTasksPageProps) {
     };
     void load();
     return () => controller.abort();
-  }, [categoryId, subCategoryId, weekInfo.start]);
+  }, [categoryId, isWeekReady, subCategoryId, weekInfo.start]);
 
   const handleImportFromLastWeek = async () => {
     setImportLoading(true);
@@ -610,6 +651,7 @@ export default function WeeklyTasksPage({ params }: WeeklyTasksPageProps) {
       description: "",
       isCompleted: false,
       weekStart: weekInfo.start,
+      completedAt: null,
       subTasks: [],
     };
     setTasks((prev) => {
@@ -1203,11 +1245,13 @@ export default function WeeklyTasksPage({ params }: WeeklyTasksPageProps) {
 
   const completedSummary = useMemo(() => {
     type SubTaskGroup = { subTask: SubTask; progress: Progress[] };
-    const result: {
+    type CompletedGroup = {
       task: Task;
       hasTaskCompleted: boolean;
       subTaskGroups: SubTaskGroup[];
-    }[] = [];
+      isRecentlyCompleted: boolean;
+    };
+    const result: CompletedGroup[] = [];
     for (const task of tasks) {
       const subTaskMap = new Map<string, SubTaskGroup>();
       for (const st of task.subTasks ?? []) {
@@ -1222,11 +1266,29 @@ export default function WeeklyTasksPage({ params }: WeeklyTasksPageProps) {
           task,
           hasTaskCompleted,
           subTaskGroups: Array.from(subTaskMap.values()),
+          isRecentlyCompleted: hasTaskCompleted && isWithin24Hours(task.completedAt),
         });
       }
     }
     return result;
   }, [tasks]);
+
+  const dashboardStats = useMemo(() => {
+    const activeCount = displayTaskViews.filter(({ task }) => !task.isCompleted).length;
+    const priorityCount = displayTaskViews.filter(
+      ({ stats }) => stats.importantPending > 0,
+    ).length;
+    const attentionCount = displayTaskViews.filter(
+      ({ stats }) => stats.hasOverdue || stats.hasUrgent,
+    ).length;
+
+    return {
+      activeCount,
+      priorityCount,
+      attentionCount,
+      completedCount: completedSummary.length,
+    };
+  }, [completedSummary.length, displayTaskViews]);
 
   const [copiedId, setCopiedId] = useState<string | null>(null);
 
@@ -1234,6 +1296,7 @@ export default function WeeklyTasksPage({ params }: WeeklyTasksPageProps) {
     task: Task;
     hasTaskCompleted: boolean;
     subTaskGroups: { subTask: SubTask; progress: Progress[] }[];
+    isRecentlyCompleted: boolean;
   }) => {
     const lines: string[] = [];
     lines.push(
@@ -1324,184 +1387,249 @@ export default function WeeklyTasksPage({ params }: WeeklyTasksPageProps) {
 
   return (
     <div className="space-y-6">
-      <nav className="text-xs text-slate-500">
-        <Link href="/" className="hover:text-slate-700 hover:underline">
-          首页
-        </Link>
-        <span className="mx-1.5">/</span>
-        <Link
-          href={`/${categoryId}`}
-          className="hover:text-slate-700 hover:underline"
-        >
-          {categoryName ?? categoryId}
-        </Link>
-        <span className="mx-1.5">/</span>
-        <span className="text-slate-700">
-          {subCategoryName ?? subCategoryId}
-        </span>
-      </nav>
+      <section className="surface-panel overflow-hidden px-5 py-5 sm:px-6 sm:py-6">
+        <div className="flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
+          <div className="space-y-4">
+            <nav className="flex flex-wrap items-center gap-2 text-xs text-slate-500">
+              <Link href="/" className="stat-pill no-underline hover:text-slate-700">
+                首页
+              </Link>
+              <span className="text-slate-300">/</span>
+              <Link
+                href={`/${categoryId}`}
+                className="stat-pill no-underline hover:text-slate-700"
+              >
+                {categoryName ?? categoryId}
+              </Link>
+              <span className="text-slate-300">/</span>
+              <span className="stat-pill border-primary/10 bg-primary/10 text-primary">
+                {subCategoryName ?? subCategoryId}
+              </span>
+            </nav>
 
-      <div className="flex items-center justify-between gap-4">
-        <h1 className="text-xl font-semibold text-slate-900">周记清单</h1>
-        <Link
-          href={`/${categoryId}/${subCategoryId}/summary`}
-          className="btn-primary"
-        >
-          ✨ AI 总结
-        </Link>
-      </div>
+            <div>
+              <div className="text-xs font-medium uppercase tracking-[0.18em] text-primary/70">
+                Weekly Board
+              </div>
+              <h1 className="mt-3 text-3xl font-semibold tracking-tight text-slate-900 sm:text-4xl">
+                {subCategoryName ?? "周记清单"}
+              </h1>
+              <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-500">
+                当前周内的主任务、子任务和进度都在这里维护，适合快速浏览和持续推进。
+              </p>
+            </div>
 
-      <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-slate-200 bg-white px-4 py-3 text-sm">
-        <div className="flex flex-wrap items-center gap-3">
-          <select
-            value={selectedYear}
-            aria-label="选择年份"
-            onChange={(e) => {
-              const y = Number(e.target.value);
-              const weeks = getWeeksInYear(y);
-              const inYear = weeks.find((w) => w.start === selectedWeekStart);
-              selectWeekStart(
-                inYear ? inYear.start : weeks[0]?.start ?? selectedWeekStart,
-              );
-            }}
-            className="rounded-lg border border-slate-200 bg-white px-2 py-1 text-xs text-slate-700"
-          >
-            {Array.from({ length: 5 }, (_, i) => new Date().getFullYear() - 2 + i).map(
-              (y) => (
-                <option key={y} value={y}>
-                  {y}年
-                </option>
-              ),
-            )}
-          </select>
-          <button
-            type="button"
-            onClick={goPrevWeek}
-            className="btn-ghost rounded-lg border border-slate-200 px-2 py-1 text-xs text-slate-600"
-          >
-            上周
-          </button>
-          <div className="relative">
+            <div className="flex flex-wrap gap-2">
+              <span className="stat-pill">
+                {weekInfo.isoYear} 第{weekInfo.weekNumber}周
+              </span>
+              <span className="stat-pill">{dashboardStats.activeCount} 个进行中任务</span>
+              <span className="stat-pill">{dashboardStats.priorityCount} 个高优任务</span>
+              <span className="stat-pill">{dashboardStats.completedCount} 组已完成摘要</span>
+              {dashboardStats.attentionCount > 0 && (
+                <span className="rounded-full border border-amber-200 bg-amber-50 px-3 py-1 text-xs font-medium text-amber-700">
+                  {dashboardStats.attentionCount} 项需要关注
+                </span>
+              )}
+            </div>
+          </div>
+
+          <div className="card min-w-[280px] max-w-sm px-5 py-5">
+            <div className="text-xs font-medium uppercase tracking-[0.16em] text-slate-400">
+              Current Week
+            </div>
+            <div className="mt-3 text-lg font-semibold text-slate-900">
+              {weekInfo.label}
+            </div>
+            <p className="mt-2 text-sm leading-6 text-slate-500">
+              周切换、任务补录和 AI 总结都从这里开始。
+            </p>
+            <Link
+              href={`/${categoryId}/${subCategoryId}/summary`}
+              className="btn-primary mt-4 no-underline"
+            >
+              ✨ AI 总结
+            </Link>
+          </div>
+        </div>
+      </section>
+
+      <section className="card space-y-4 px-4 py-4 sm:px-5 sm:py-5">
+        <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
+          <div className="flex flex-wrap items-center gap-2">
+            <select
+              value={selectedYear}
+              aria-label="选择年份"
+              onChange={(e) => {
+                const y = Number(e.target.value);
+                const weeks = getWeeksInYear(y);
+                const inYear = weeks.find((w) => w.start === selectedWeekStart);
+                selectWeekStart(
+                  inYear ? inYear.start : weeks[0]?.start ?? selectedWeekStart,
+                );
+              }}
+              className="select-base"
+            >
+              {Array.from({ length: 5 }, (_, i) => new Date().getFullYear() - 2 + i).map(
+                (y) => (
+                  <option key={y} value={y}>
+                    {y}年
+                  </option>
+                ),
+              )}
+            </select>
+            <button type="button" onClick={goPrevWeek} className="btn-ghost text-xs">
+              上周
+            </button>
+            <div className="relative">
+              <button
+                type="button"
+                onClick={() => setWeekPickerOpen((v) => !v)}
+                className="btn-ghost px-4 text-xs font-medium text-slate-800"
+                title="选择周"
+              >
+                {weekInfo.label} ▾
+              </button>
+              {weekPickerOpen && (
+                <>
+                  <div
+                    className="fixed inset-0 z-40"
+                    onClick={() => setWeekPickerOpen(false)}
+                    aria-hidden
+                  />
+                  <div className="absolute left-0 top-full z-50 mt-2 max-h-64 min-w-[280px] overflow-y-auto rounded-3xl border border-white/90 bg-white/92 p-2 shadow-[0_24px_60px_rgba(148,163,184,0.22)] backdrop-blur-xl">
+                    {weeksInYear.map((w) => (
+                      <button
+                        key={w.start}
+                        type="button"
+                        onClick={() => {
+                          selectWeekStart(w.start);
+                          setWeekPickerOpen(false);
+                        }}
+                        className={`block w-full rounded-2xl px-3 py-2 text-left text-xs transition-colors duration-150 hover:bg-slate-50 ${
+                          w.start === selectedWeekStart
+                            ? "bg-primary/10 font-medium text-primary"
+                            : "text-slate-700"
+                        }`}
+                      >
+                        第{w.weekIndex}周 {w.label}
+                      </button>
+                    ))}
+                  </div>
+                </>
+              )}
+            </div>
+            <button type="button" onClick={goNextWeek} className="btn-ghost text-xs">
+              下周
+            </button>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2">
             <button
               type="button"
-              onClick={() => setWeekPickerOpen((v) => !v)}
-              className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-medium text-slate-800 hover:bg-slate-50"
-              title="选择周"
+              onClick={isAllExpanded ? collapseAll : expandAll}
+              className="btn-ghost text-xs"
             >
-              {weekInfo.label} ▾
+              {isAllExpanded ? "一键收起" : "一键展开"}
             </button>
-            {weekPickerOpen && (
-              <>
-                <div
-                  className="fixed inset-0 z-40"
-                  onClick={() => setWeekPickerOpen(false)}
-                  aria-hidden
-                />
-                <div className="absolute left-0 top-full z-50 mt-1 max-h-56 overflow-y-auto rounded-lg border border-slate-200 bg-white py-1 shadow-lg">
-                  {weeksInYear.map((w) => (
-                    <button
-                      key={w.start}
-                      type="button"
-                      onClick={() => {
-                        selectWeekStart(w.start);
-                        setWeekPickerOpen(false);
-                      }}
-                      className={`block w-full px-3 py-2 text-left text-xs hover:bg-slate-50 ${
-                        w.start === selectedWeekStart
-                          ? "bg-primary/10 text-primary font-medium"
-                          : "text-slate-700"
-                      }`}
-                    >
-                      第{w.weekIndex}周 {w.label}
-                    </button>
-                  ))}
-                </div>
-              </>
+            <button
+              type="button"
+              onClick={handleImportFromLastWeek}
+              disabled={importLoading}
+              title="将上周未完成的主任务、子任务、进度复制到本周，与本周任务合并"
+              className="btn-secondary text-xs"
+            >
+              {importLoading ? "导入中…" : "导入上周未完成"}
+            </button>
+            <label className="inline-flex cursor-pointer items-center gap-2 rounded-full border border-slate-200/80 bg-white/80 px-3 py-2 text-xs text-slate-600">
+              <input
+                type="checkbox"
+                checked={hideCompleted}
+                onChange={(e) => setHideCompleted(e.target.checked)}
+                className="h-3.5 w-3.5 rounded border-slate-300"
+              />
+              不展示已完成
+            </label>
+          </div>
+        </div>
+
+        {(importToast || saveToast) && (
+          <div className="flex flex-wrap gap-2 text-xs">
+            {importToast && (
+              <span className="rounded-full bg-slate-100 px-3 py-1 text-slate-500">
+                {importToast}
+              </span>
+            )}
+            {saveToast && (
+              <span className="rounded-full bg-amber-50 px-3 py-1 text-amber-700">
+                {saveToast}
+              </span>
             )}
           </div>
-          <button
-            type="button"
-            onClick={goNextWeek}
-            className="btn-ghost rounded-lg border border-slate-200 px-2 py-1 text-xs text-slate-600"
-          >
-            下周
-          </button>
-        </div>
-        <div className="flex items-center gap-4">
-          <button
-            type="button"
-            onClick={isAllExpanded ? collapseAll : expandAll}
-            className="btn-ghost rounded-lg border border-slate-200 px-2 py-1 text-xs text-slate-600 hover:bg-slate-50"
-          >
-            {isAllExpanded ? "一键收起" : "一键展开"}
-          </button>
-          <button
-            type="button"
-            onClick={handleImportFromLastWeek}
-            disabled={importLoading}
-            title="将上周未完成的主任务、子任务、进度复制到本周，与本周任务合并"
-            className="btn-ghost rounded-lg border border-slate-200 px-2 py-1 text-xs text-slate-600 hover:bg-slate-50 disabled:opacity-50"
-          >
-            {importLoading ? "导入中…" : "导入上周未完成"}
-          </button>
-          {importToast && (
-            <span className="text-xs text-slate-500">{importToast}</span>
-          )}
-          {saveToast && (
-            <span className="text-xs text-amber-600">{saveToast}</span>
-          )}
-          <label className="flex cursor-pointer items-center gap-1.5 text-xs text-slate-600">
-            <input
-              type="checkbox"
-              checked={hideCompleted}
-              onChange={(e) => setHideCompleted(e.target.checked)}
-              className="h-3.5 w-3.5 rounded border-slate-300"
-            />
-            不展示已完成
-          </label>
-        </div>
-      </div>
+        )}
+      </section>
 
-      <div className="card space-y-3 px-4 py-4">
+      <div className="card space-y-4 px-4 py-4 sm:px-5 sm:py-5">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+          <div>
+            <h2 className="text-base font-semibold text-slate-900">本周任务</h2>
+            <p className="mt-1 text-sm text-slate-500">
+              任务已按优先级和完成状态整理，展开后可继续维护子任务与进度。
+            </p>
+          </div>
+          <div className="flex flex-wrap gap-2 text-xs">
+            <span className="stat-pill">{displayTaskViews.length} 个任务分组</span>
+            <span className="stat-pill">{hideCompleted ? "已隐藏完成项" : "显示全部任务"}</span>
+          </div>
+        </div>
         {loading ? (
-          <div className="space-y-2 py-2 animate-in">
+          <div className="space-y-3 py-2 animate-in">
             {[1, 2, 3, 4].map((i) => (
               <div
                 key={i}
-                className="flex items-center gap-2 border-b border-slate-100 py-2 last:border-0"
+                className="rounded-3xl border border-white/80 bg-white/78 px-4 py-4 shadow-sm"
                 style={{ animationDelay: `${i * 80}ms` }}
               >
-                <div className="h-4 w-4 shrink-0 skeleton" />
-                <div className="min-w-0 flex-1 space-y-1.5">
-                  <div className="h-3 w-24 skeleton rounded" />
-                  <div className="h-2.5 w-32 skeleton rounded" />
+                <div className="flex items-center gap-3">
+                  <div className="h-4 w-4 shrink-0 skeleton" />
+                  <div className="min-w-0 flex-1 space-y-1.5">
+                    <div className="h-3 w-24 skeleton rounded" />
+                    <div className="h-2.5 w-32 skeleton rounded" />
+                  </div>
                 </div>
               </div>
             ))}
           </div>
         ) : displayTaskViews.length === 0 ? (
-          <div className="flex flex-col items-center justify-center gap-3 py-8 text-center animate-in">
-            <div className="flex h-14 w-14 items-center justify-center rounded-full bg-slate-100 text-2xl">
+          <div className="flex flex-col items-center justify-center gap-3 py-10 text-center animate-in">
+            <div className="icon-badge h-16 w-16 rounded-full text-2xl">
               📝
             </div>
-            <div className="text-sm font-medium text-slate-900">
+            <div className="text-base font-medium text-slate-900">
               {hideCompleted ? "暂无未完成任务" : "本周还没有任务"}
             </div>
-            <div className="text-xs text-slate-500">
+            <div className="max-w-sm text-sm leading-6 text-slate-500">
               添加第一个任务，开始规划这一周吧
             </div>
           </div>
         ) : (
-          <ul className="text-sm">
+          <ul className="space-y-3 text-sm">
             {displayTaskViews.map(
               ({ task, visibleSubTasks, subTaskCountLabel, summaryText }) => (
-              <li key={task.id} className="border-b border-slate-100 py-2 last:border-b-0">
-                <div className="flex items-start justify-between gap-2">
-                  <div className="flex min-w-0 flex-1 items-start gap-1.5">
+              <li
+                key={task.id}
+                className={`rounded-[1.7rem] border px-4 py-4 shadow-[0_14px_32px_rgba(148,163,184,0.1)] transition-colors duration-200 ${
+                  task.isCompleted
+                    ? "border-slate-200/80 bg-white/70"
+                    : "border-white/80 bg-[linear-gradient(180deg,rgba(255,255,255,0.96),rgba(244,250,255,0.92))]"
+                }`}
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <div className="flex min-w-0 flex-1 items-start gap-2">
                     <button
                       type="button"
                       onClick={() => toggleExpand(task)}
-                      className="mt-0.5 shrink-0 w-5 text-left text-xs text-slate-500 hover:text-slate-800"
+                      className="mt-0.5 shrink-0 w-5 text-left text-xs text-slate-500 transition-colors duration-150 hover:text-slate-800"
                       title={expandedTaskIds.has(task.id) ? "收起" : "展开"}
                     >
                       <span
@@ -1515,7 +1643,7 @@ export default function WeeklyTasksPage({ params }: WeeklyTasksPageProps) {
                     <button
                       type="button"
                       onClick={() => handleToggleCompleted(task)}
-                      className="flex h-4 w-4 shrink-0 items-center justify-center rounded border border-slate-300 bg-white text-[10px] text-primary"
+                      className="mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded border border-slate-300 bg-white text-[10px] text-primary shadow-sm"
                     >
                       {task.isCompleted ? "✓" : ""}
                     </button>
@@ -1528,12 +1656,12 @@ export default function WeeklyTasksPage({ params }: WeeklyTasksPageProps) {
                         className={`flex min-h-5 flex-wrap items-center gap-x-1.5 text-sm ${
                           task.isCompleted
                             ? "line-through text-slate-400"
-                            : "font-semibold text-slate-700"
+                            : "font-semibold text-slate-800"
                         }`}
                       >
                         {task.content}
                         {subTaskCountLabel ? (
-                          <span className="text-xs font-normal text-slate-500">
+                          <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-normal text-slate-500">
                             {subTaskCountLabel}
                           </span>
                         ) : null}
@@ -1547,7 +1675,7 @@ export default function WeeklyTasksPage({ params }: WeeklyTasksPageProps) {
                           {task.description}
                         </span>
                       )}
-                      <span className="mt-0.5 block text-xs text-slate-500">
+                      <span className="mt-2 inline-flex rounded-full bg-slate-100/80 px-2.5 py-1 text-[11px] text-slate-500">
                         {summaryText}
                       </span>
                     </button>
@@ -1556,7 +1684,7 @@ export default function WeeklyTasksPage({ params }: WeeklyTasksPageProps) {
                     <button
                       type="button"
                       onClick={() => openEdit(task)}
-                      className="rounded px-1.5 py-0.5 hover:bg-slate-100"
+                      className="btn-ghost h-8 w-8 p-0 text-sm"
                       title="编辑"
                     >
                       ✏️
@@ -1564,7 +1692,7 @@ export default function WeeklyTasksPage({ params }: WeeklyTasksPageProps) {
                     <button
                       type="button"
                       onClick={() => setDeleteConfirm(task.id)}
-                      className="rounded px-1.5 py-0.5 hover:bg-slate-100"
+                      className="btn-ghost h-8 w-8 p-0 text-sm"
                       title="删除"
                     >
                       🗑️
@@ -1572,8 +1700,8 @@ export default function WeeklyTasksPage({ params }: WeeklyTasksPageProps) {
                   </div>
                 </div>
                 {expandedTaskIds.has(task.id) && (
-                  <div className="mt-2 border-l border-slate-200 pl-3 ml-1">
-                    <ul className="space-y-1">
+                  <div className="mt-4 space-y-3 border-t border-slate-100/90 pt-4">
+                    <ul className="space-y-2">
                         {visibleSubTasks.map(
                           ({
                             subTask: st,
@@ -1582,12 +1710,15 @@ export default function WeeklyTasksPage({ params }: WeeklyTasksPageProps) {
                             isDueDateOverdue,
                             visibleProgress,
                           }) => (
-                          <li key={st.id} className="py-0.5">
-                            <div className="flex items-start gap-1">
+                          <li
+                            key={st.id}
+                            className="rounded-3xl border border-emerald-100/70 bg-emerald-50/55 px-3 py-3 shadow-[0_10px_24px_rgba(167,243,208,0.12)]"
+                          >
+                            <div className="flex items-start gap-2">
                               <button
                                 type="button"
                                 onClick={() => toggleSubTaskExpand(st)}
-                                className="mt-0.5 shrink-0 w-4 text-left text-[10px] text-slate-500 hover:text-slate-800"
+                                className="mt-0.5 shrink-0 w-4 text-left text-[10px] text-slate-500 transition-colors duration-150 hover:text-slate-800"
                                 title={expandedSubTaskIds.has(st.id) ? "收起进度" : "展开进度"}
                               >
                                 <span
@@ -1605,7 +1736,7 @@ export default function WeeklyTasksPage({ params }: WeeklyTasksPageProps) {
                                 onClick={() =>
                                   handleToggleSubTaskCompleted(task.id, st)
                                 }
-                                className="mt-0.5 flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded border border-slate-300 bg-white text-[8px] text-primary"
+                                className="mt-0.5 flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded border border-slate-300 bg-white text-[8px] text-primary shadow-sm"
                               >
                                 {st.isCompleted ? "✓" : ""}
                               </button>
@@ -1660,13 +1791,13 @@ export default function WeeklyTasksPage({ params }: WeeklyTasksPageProps) {
                                   </div>
                                 )}
                               </button>
-                              <div className="flex shrink-0 gap-0.5">
+                              <div className="flex shrink-0 gap-1">
                                 <button
                                   type="button"
                                   onClick={() =>
                                     handleToggleSubTaskPriority(task.id, st)
                                   }
-                                  className={`rounded px-1 py-0.5 text-xs hover:bg-slate-100 ${
+                                  className={`btn-ghost h-7 w-7 p-0 text-xs ${
                                     isEffectivePriority
                                       ? "text-amber-500"
                                       : "text-slate-300"
@@ -1678,7 +1809,7 @@ export default function WeeklyTasksPage({ params }: WeeklyTasksPageProps) {
                                 <button
                                   type="button"
                                   onClick={() => openEditSubTask(st)}
-                                  className="rounded px-1 py-0.5 text-xs hover:bg-slate-100"
+                                  className="btn-ghost h-7 w-7 p-0 text-xs"
                                   title="编辑"
                                 >
                                   ✏️
@@ -1688,7 +1819,7 @@ export default function WeeklyTasksPage({ params }: WeeklyTasksPageProps) {
                                   onClick={() =>
                                     setDeleteSubTaskConfirm(st.id)
                                   }
-                                  className="rounded px-1 py-0.5 text-xs hover:bg-slate-100"
+                                  className="btn-ghost h-7 w-7 p-0 text-xs"
                                   title="删除"
                                 >
                                   🗑️
@@ -1696,12 +1827,12 @@ export default function WeeklyTasksPage({ params }: WeeklyTasksPageProps) {
                               </div>
                             </div>
                             {expandedSubTaskIds.has(st.id) && (
-                              <div className="mt-1 border-l border-slate-200 pl-3 ml-4">
-                                <ul className="space-y-0.5">
+                              <div className="mt-3 space-y-3 rounded-[1.4rem] border border-white/75 bg-white/76 px-3 py-3">
+                                <ul className="space-y-1.5">
                                   {visibleProgress.map((p) => (
                                     <li
                                       key={p.id}
-                                      className="flex items-start gap-2 py-0.5 text-xs"
+                                      className="flex items-start gap-2 rounded-2xl bg-white/86 px-2.5 py-2 text-xs shadow-sm"
                                     >
                                       <button
                                         type="button"
@@ -1712,7 +1843,7 @@ export default function WeeklyTasksPage({ params }: WeeklyTasksPageProps) {
                                             p,
                                           )
                                         }
-                                        className="mt-0.5 flex h-3 w-3 shrink-0 items-center justify-center rounded border border-slate-300 bg-white text-[8px] text-primary"
+                                        className="mt-0.5 flex h-3 w-3 shrink-0 items-center justify-center rounded border border-slate-300 bg-white text-[8px] text-primary shadow-sm"
                                       >
                                         {p.isCompleted ? "✓" : ""}
                                       </button>
@@ -1756,7 +1887,7 @@ export default function WeeklyTasksPage({ params }: WeeklyTasksPageProps) {
                                           </div>
                                         )}
                                       </div>
-                                      <div className="flex shrink-0 gap-0.5">
+                                      <div className="flex shrink-0 gap-1">
                                         <button
                                           type="button"
                                           onClick={() =>
@@ -1766,7 +1897,7 @@ export default function WeeklyTasksPage({ params }: WeeklyTasksPageProps) {
                                               p,
                                             )
                                           }
-                                          className={`rounded px-1 py-0.5 text-[10px] hover:bg-slate-100 ${
+                                          className={`btn-ghost h-6 w-6 p-0 text-[10px] ${
                                             p.isPriority ? "text-amber-500" : "text-slate-300"
                                           }`}
                                           title="优先级"
@@ -1776,7 +1907,7 @@ export default function WeeklyTasksPage({ params }: WeeklyTasksPageProps) {
                                         <button
                                           type="button"
                                           onClick={() => openEditProgress(p)}
-                                          className="rounded px-1 py-0.5 text-[10px] hover:bg-slate-100"
+                                          className="btn-ghost h-6 w-6 p-0 text-[10px]"
                                           title="编辑"
                                         >
                                           ✏️
@@ -1790,7 +1921,7 @@ export default function WeeklyTasksPage({ params }: WeeklyTasksPageProps) {
                                               subTaskId: st.id,
                                             })
                                           }
-                                          className="rounded px-1 py-0.5 text-[10px] hover:bg-slate-100"
+                                          className="btn-ghost h-6 w-6 p-0 text-[10px]"
                                           title="删除"
                                         >
                                           🗑️
@@ -1800,7 +1931,7 @@ export default function WeeklyTasksPage({ params }: WeeklyTasksPageProps) {
                                   ))}
                                 </ul>
                                 {newProgressSubTaskId === st.id ? (
-                                  <div className="mt-2 space-y-1.5 border border-slate-200 p-2">
+                                  <div className="mt-2 space-y-2 rounded-3xl border border-slate-200/80 bg-white/92 p-3">
                                     <input
                                       type="text"
                                       value={newProgressContent}
@@ -1808,7 +1939,7 @@ export default function WeeklyTasksPage({ params }: WeeklyTasksPageProps) {
                                         setNewProgressContent(e.target.value)
                                       }
                                       placeholder="进度内容"
-                                      className="input-base py-1.5 text-xs"
+                                      className="input-base py-2 text-xs"
                                     />
                                     <input
                                       type="text"
@@ -1817,7 +1948,7 @@ export default function WeeklyTasksPage({ params }: WeeklyTasksPageProps) {
                                         setNewProgressAssignee(e.target.value)
                                       }
                                       placeholder="对接人"
-                                      className="input-base py-1.5 text-xs"
+                                      className="input-base py-2 text-xs"
                                     />
                                     <input
                                       type="date"
@@ -1825,7 +1956,7 @@ export default function WeeklyTasksPage({ params }: WeeklyTasksPageProps) {
                                       onChange={(e) =>
                                         setNewProgressDueDate(e.target.value)
                                       }
-                                      className="input-base py-1.5 text-xs"
+                                      className="input-base py-2 text-xs"
                                     />
                                     <div className="flex items-center justify-between">
                                       <label className="flex items-center gap-1 text-xs text-slate-600">
@@ -1851,7 +1982,7 @@ export default function WeeklyTasksPage({ params }: WeeklyTasksPageProps) {
                                             setNewProgressPriority(false);
                                             setNewProgressDueDate("");
                                           }}
-                                          className="rounded border border-slate-200 px-1.5 py-0.5 text-xs text-slate-600 hover:bg-slate-100"
+                                          className="btn-secondary px-3 py-1.5 text-xs"
                                         >
                                           取消
                                         </button>
@@ -1865,7 +1996,7 @@ export default function WeeklyTasksPage({ params }: WeeklyTasksPageProps) {
                                             addProgressLoading ===
                                               `${task.id}-${st.id}`
                                           }
-                                          className="rounded bg-primary px-1.5 py-0.5 text-xs font-medium text-white hover:bg-blue-600 disabled:opacity-70"
+                                          className="btn-primary px-3 py-1.5 text-xs"
                                         >
                                           {addProgressLoading ===
                                           `${task.id}-${st.id}` ? (
@@ -1894,7 +2025,7 @@ export default function WeeklyTasksPage({ params }: WeeklyTasksPageProps) {
                                       addProgressLoading ===
                                       `${task.id}-${st.id}`
                                     }
-                                    className="mt-2 text-left text-xs text-slate-500 hover:text-slate-800 disabled:opacity-70"
+                                    className="mt-2 inline-flex rounded-full bg-white/90 px-3 py-1.5 text-left text-xs text-slate-500 shadow-sm transition-colors duration-150 hover:text-slate-800 disabled:opacity-70"
                                   >
                                     {addProgressLoading ===
                                     `${task.id}-${st.id}` ? (
@@ -1913,7 +2044,7 @@ export default function WeeklyTasksPage({ params }: WeeklyTasksPageProps) {
                         ))}
                     </ul>
                         {newSubTaskId === task.id ? (
-                          <div className="mt-2 space-y-2 border border-slate-200 p-2">
+                          <div className="mt-3 space-y-2 rounded-3xl border border-slate-200/80 bg-white/86 p-3">
                             <input
                               type="text"
                               value={newSubTaskContent}
@@ -1977,7 +2108,7 @@ export default function WeeklyTasksPage({ params }: WeeklyTasksPageProps) {
                                     setNewSubTaskPriority(false);
                                     setNewSubTaskDueDate("");
                                   }}
-                                  className="rounded border border-slate-200 px-2 py-1 text-xs text-slate-600 hover:bg-slate-100"
+                                  className="btn-secondary px-3 py-1.5 text-xs"
                                 >
                                   取消
                                 </button>
@@ -1988,7 +2119,7 @@ export default function WeeklyTasksPage({ params }: WeeklyTasksPageProps) {
                                     !newSubTaskContent.trim() ||
                                     addSubTaskLoading === task.id
                                   }
-                                  className="rounded bg-primary px-2 py-1 text-xs font-medium text-white hover:bg-blue-600 disabled:opacity-70"
+                                  className="btn-primary px-3 py-1.5 text-xs"
                                 >
                                   {addSubTaskLoading === task.id ? (
                                     <span className="inline-flex items-center gap-1">
@@ -2007,7 +2138,7 @@ export default function WeeklyTasksPage({ params }: WeeklyTasksPageProps) {
                             type="button"
                             onClick={() => setNewSubTaskId(task.id)}
                             disabled={addSubTaskLoading === task.id}
-                            className="mt-1 text-left text-xs text-slate-500 hover:text-slate-800 disabled:opacity-70"
+                            className="mt-2 inline-flex rounded-full bg-white/88 px-3 py-1.5 text-left text-xs text-slate-500 shadow-sm transition-colors duration-150 hover:text-slate-800 disabled:opacity-70"
                           >
                             {addSubTaskLoading === task.id ? (
                               <span className="inline-flex items-center gap-1.5">
@@ -2029,11 +2160,11 @@ export default function WeeklyTasksPage({ params }: WeeklyTasksPageProps) {
 
       {editTask && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 animate-fade-in"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/18 p-4 backdrop-blur-sm animate-fade-in"
           onClick={() => setEditTask(null)}
         >
           <div
-            className="card w-full max-w-md p-6 animate-scale-in"
+            className="modal-panel w-full max-w-md p-6 animate-scale-in"
             onClick={(e) => e.stopPropagation()}
           >
             <h2 className="text-lg font-semibold text-slate-900">编辑任务</h2>
@@ -2047,7 +2178,7 @@ export default function WeeklyTasksPage({ params }: WeeklyTasksPageProps) {
                   value={editContent}
                   onChange={(e) => setEditContent(e.target.value)}
                   placeholder="任务内容"
-                  className="w-full rounded-lg border border-slate-200 px-3 py-2.5 text-sm outline-none focus:border-primary focus:ring-1 focus:ring-primary"
+                  className="input-base"
                   autoFocus
                 />
               </div>
@@ -2060,14 +2191,14 @@ export default function WeeklyTasksPage({ params }: WeeklyTasksPageProps) {
                   onChange={(e) => setEditDescription(e.target.value)}
                   placeholder="添加具体描述..."
                   rows={3}
-                  className="w-full resize-none rounded-lg border border-slate-200 px-3 py-2.5 text-sm outline-none focus:border-primary focus:ring-1 focus:ring-primary"
+                  className="input-base resize-none"
                 />
               </div>
               <div className="flex justify-end gap-2">
                 <button
                   type="button"
                   onClick={() => setEditTask(null)}
-                  className="rounded-lg border border-slate-200 px-4 py-2 text-sm text-slate-600 hover:bg-slate-50"
+                  className="btn-secondary"
                 >
                   取消
                 </button>
@@ -2086,11 +2217,11 @@ export default function WeeklyTasksPage({ params }: WeeklyTasksPageProps) {
 
       {editSubTask && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 animate-fade-in"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/18 p-4 backdrop-blur-sm animate-fade-in"
           onClick={() => setEditSubTask(null)}
         >
           <div
-            className="card w-full max-w-md p-6 animate-scale-in"
+            className="modal-panel w-full max-w-md p-6 animate-scale-in"
             onClick={(e) => e.stopPropagation()}
           >
             <h2 className="text-lg font-semibold text-slate-900">编辑子任务</h2>
@@ -2104,7 +2235,7 @@ export default function WeeklyTasksPage({ params }: WeeklyTasksPageProps) {
                   value={editSubTaskContent}
                   onChange={(e) => setEditSubTaskContent(e.target.value)}
                   placeholder="子任务内容"
-                  className="w-full rounded-lg border border-slate-200 px-3 py-2.5 text-sm outline-none focus:border-primary focus:ring-1 focus:ring-primary"
+                  className="input-base"
                   autoFocus
                 />
               </div>
@@ -2117,7 +2248,7 @@ export default function WeeklyTasksPage({ params }: WeeklyTasksPageProps) {
                   value={editSubTaskAssignee}
                   onChange={(e) => setEditSubTaskAssignee(e.target.value)}
                   placeholder="输入对接人姓名"
-                  className="w-full rounded-lg border border-slate-200 px-3 py-2.5 text-sm outline-none focus:border-primary focus:ring-1 focus:ring-primary"
+                  className="input-base"
                 />
               </div>
               <div>
@@ -2129,7 +2260,7 @@ export default function WeeklyTasksPage({ params }: WeeklyTasksPageProps) {
                   onChange={(e) => setEditSubTaskDesc(e.target.value)}
                   placeholder="添加描述..."
                   rows={3}
-                  className="w-full resize-none rounded-lg border border-slate-200 px-3 py-2.5 text-sm outline-none focus:border-primary focus:ring-1 focus:ring-primary"
+                  className="input-base resize-none"
                 />
               </div>
               <div>
@@ -2156,7 +2287,7 @@ export default function WeeklyTasksPage({ params }: WeeklyTasksPageProps) {
                 <button
                   type="button"
                   onClick={() => setEditSubTask(null)}
-                  className="rounded-lg border border-slate-200 px-4 py-2 text-sm text-slate-600 hover:bg-slate-50"
+                  className="btn-secondary"
                 >
                   取消
                 </button>
@@ -2175,11 +2306,11 @@ export default function WeeklyTasksPage({ params }: WeeklyTasksPageProps) {
 
       {editProgress && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 animate-fade-in"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/18 p-4 backdrop-blur-sm animate-fade-in"
           onClick={() => setEditProgress(null)}
         >
           <div
-            className="card w-full max-w-md p-6 animate-scale-in"
+            className="modal-panel w-full max-w-md p-6 animate-scale-in"
             onClick={(e) => e.stopPropagation()}
           >
             <h2 className="text-lg font-semibold text-slate-900">编辑进度</h2>
@@ -2233,7 +2364,7 @@ export default function WeeklyTasksPage({ params }: WeeklyTasksPageProps) {
                 <button
                   type="button"
                   onClick={() => setEditProgress(null)}
-                  className="rounded-lg border border-slate-200 px-4 py-2 text-sm text-slate-600 hover:bg-slate-50"
+                  className="btn-secondary"
                 >
                   取消
                 </button>
@@ -2252,11 +2383,11 @@ export default function WeeklyTasksPage({ params }: WeeklyTasksPageProps) {
 
       {deleteConfirm && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 animate-fade-in"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/18 p-4 backdrop-blur-sm animate-fade-in"
           onClick={() => setDeleteConfirm(null)}
         >
           <div
-            className="card w-full max-w-md p-6 animate-scale-in"
+            className="modal-panel w-full max-w-md p-6 animate-scale-in"
             onClick={(e) => e.stopPropagation()}
           >
             <h2 className="text-lg font-semibold text-slate-900">删除任务</h2>
@@ -2267,14 +2398,14 @@ export default function WeeklyTasksPage({ params }: WeeklyTasksPageProps) {
               <button
                 type="button"
                 onClick={() => setDeleteConfirm(null)}
-                className="rounded-lg border border-slate-200 px-4 py-2 text-sm text-slate-600 hover:bg-slate-50"
+                className="btn-secondary"
               >
                 取消
               </button>
               <button
                 type="button"
                 onClick={() => handleDeleteTask(deleteConfirm)}
-                className="rounded-lg bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700"
+                className="inline-flex items-center justify-center rounded-full bg-red-500 px-4 py-2 text-sm font-medium text-white transition-colors duration-150 hover:bg-red-600"
               >
                 删除
               </button>
@@ -2285,11 +2416,11 @@ export default function WeeklyTasksPage({ params }: WeeklyTasksPageProps) {
 
       {deleteSubTaskConfirm && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 animate-fade-in"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/18 p-4 backdrop-blur-sm animate-fade-in"
           onClick={() => setDeleteSubTaskConfirm(null)}
         >
           <div
-            className="card w-full max-w-md p-6 animate-scale-in"
+            className="modal-panel w-full max-w-md p-6 animate-scale-in"
             onClick={(e) => e.stopPropagation()}
           >
             <h2 className="text-lg font-semibold text-slate-900">删除子任务</h2>
@@ -2300,7 +2431,7 @@ export default function WeeklyTasksPage({ params }: WeeklyTasksPageProps) {
               <button
                 type="button"
                 onClick={() => setDeleteSubTaskConfirm(null)}
-                className="rounded-lg border border-slate-200 px-4 py-2 text-sm text-slate-600 hover:bg-slate-50"
+                className="btn-secondary"
               >
                 取消
               </button>
@@ -2314,7 +2445,7 @@ export default function WeeklyTasksPage({ params }: WeeklyTasksPageProps) {
                     handleDeleteSubTask(task.id, deleteSubTaskConfirm);
                   setDeleteSubTaskConfirm(null);
                 }}
-                className="rounded-lg bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700"
+                className="inline-flex items-center justify-center rounded-full bg-red-500 px-4 py-2 text-sm font-medium text-white transition-colors duration-150 hover:bg-red-600"
               >
                 删除
               </button>
@@ -2325,11 +2456,11 @@ export default function WeeklyTasksPage({ params }: WeeklyTasksPageProps) {
 
       {deleteProgressConfirm && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 animate-fade-in"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/18 p-4 backdrop-blur-sm animate-fade-in"
           onClick={() => setDeleteProgressConfirm(null)}
         >
           <div
-            className="card w-full max-w-md p-6 animate-scale-in"
+            className="modal-panel w-full max-w-md p-6 animate-scale-in"
             onClick={(e) => e.stopPropagation()}
           >
             <h2 className="text-lg font-semibold text-slate-900">删除进度</h2>
@@ -2340,7 +2471,7 @@ export default function WeeklyTasksPage({ params }: WeeklyTasksPageProps) {
               <button
                 type="button"
                 onClick={() => setDeleteProgressConfirm(null)}
-                className="rounded-lg border border-slate-200 px-4 py-2 text-sm text-slate-600 hover:bg-slate-50"
+                className="btn-secondary"
               >
                 取消
               </button>
@@ -2349,7 +2480,7 @@ export default function WeeklyTasksPage({ params }: WeeklyTasksPageProps) {
                 onClick={() => {
                   handleDeleteProgress();
                 }}
-                className="rounded-lg bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700"
+                className="inline-flex items-center justify-center rounded-full bg-red-500 px-4 py-2 text-sm font-medium text-white transition-colors duration-150 hover:bg-red-600"
               >
                 删除
               </button>
@@ -2358,8 +2489,16 @@ export default function WeeklyTasksPage({ params }: WeeklyTasksPageProps) {
         </div>
       )}
 
-      <div className="card flex flex-col gap-3 px-4 py-4">
-        <div className="text-sm font-medium text-slate-800">添加任务</div>
+      <div className="card flex flex-col gap-3 px-4 py-4 sm:px-5 sm:py-5">
+        <div className="flex items-center justify-between gap-3">
+          <div>
+            <div className="text-sm font-medium text-slate-800">添加任务</div>
+            <p className="mt-1 text-xs text-slate-500">
+              先写主任务，后续再补充子任务、描述和进度。
+            </p>
+          </div>
+          <div className="icon-badge h-12 w-12 rounded-full text-xl">＋</div>
+        </div>
         <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
           <input
             type="text"
@@ -2379,28 +2518,30 @@ export default function WeeklyTasksPage({ params }: WeeklyTasksPageProps) {
       </div>
 
       {completedSummary.length > 0 && !hideCompleted && (
-        <div className="card overflow-hidden px-4 py-4">
-          <div className="mb-3 flex items-center justify-between">
+        <div className="card overflow-hidden px-4 py-4 sm:px-5 sm:py-5">
+          <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div className="flex items-center gap-2">
-              <h3 className="text-sm font-semibold text-slate-800">
+              <h3 className="text-base font-semibold text-slate-800">
                 ✓ 本周已完成
               </h3>
               <button
                 type="button"
                 onClick={handleCopyAll}
-                className="rounded px-2 py-0.5 text-xs text-slate-500 hover:bg-slate-100 hover:text-slate-700"
+                className="btn-ghost px-3 py-1 text-xs"
                 title="复制全部"
               >
                 {copiedId === "all" ? "已复制" : "复制全部"}
               </button>
             </div>
-            <span className="text-xs text-slate-500">{weekInfo.label}</span>
+            <span className="rounded-full bg-slate-100 px-3 py-1 text-xs text-slate-500">
+              {weekInfo.label}
+            </span>
           </div>
           <ul className="space-y-2 text-sm">
-            {completedSummary.map(({ task, hasTaskCompleted, subTaskGroups }) => (
+            {completedSummary.map(({ task, hasTaskCompleted, subTaskGroups, isRecentlyCompleted }) => (
               <li
                 key={task.id}
-                className="border-b border-slate-100 pb-2 last:border-b-0"
+                className={`rounded-3xl border px-4 py-3 ${isRecentlyCompleted ? "border-yellow-200 bg-yellow-50/90" : "border-slate-100/90 bg-white/72"}`}
               >
                 <div className="flex items-center justify-between gap-2">
                   <div className="flex min-w-0 flex-1 items-center gap-2">
@@ -2421,14 +2562,17 @@ export default function WeeklyTasksPage({ params }: WeeklyTasksPageProps) {
                   <button
                     type="button"
                     onClick={() => handleCopyTask(task.id)}
-                    className="shrink-0 text-xs text-slate-500 hover:text-slate-800"
+                    className="btn-ghost shrink-0 px-3 py-1 text-xs"
                     title="复制此项"
                   >
                     {copiedId === task.id ? "已复制" : "复制"}
                   </button>
                 </div>
                 {subTaskGroups.map(({ subTask, progress }) => (
-                  <div key={subTask.id} className="mt-1 border-l border-slate-200 pl-3 ml-1">
+                  <div
+                    key={subTask.id}
+                    className="mt-3 rounded-2xl border border-slate-100/90 bg-white/78 px-4 py-3"
+                  >
                     {subTask.isCompleted && (
                       <div className="flex items-center gap-2 py-0.5 text-slate-600">
                         <span className="shrink-0 text-slate-500">✓</span>
@@ -2444,7 +2588,7 @@ export default function WeeklyTasksPage({ params }: WeeklyTasksPageProps) {
                       {progress.map((p) => (
                         <li
                           key={p.id}
-                          className="flex items-center gap-2 py-0.5 pl-2 text-slate-600"
+                          className="flex items-center gap-2 rounded-xl bg-slate-50/80 px-3 py-2 text-slate-600"
                         >
                           <span className="shrink-0 text-slate-500">✓</span>
                           <span>{p.content}</span>

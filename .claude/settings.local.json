@@ -6,7 +6,11 @@
       "Bash(npx eslint:*)",
       "Bash(npx tsc:*)",
       "Bash(git add:*)",
-      "Bash(git commit:*)"
+      "Bash(git commit:*)",
+      "Bash(curl:*)",
+      "Bash(pkill -f \"next dev\")",
+      "Bash(node -e ':*)",
+      "Bash(node:*)"
     ]
   }
 }

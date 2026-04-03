@@ -269,7 +269,7 @@ export default function SummaryPage({ params }: SummaryPageProps) {
               <select
                 value={year}
                 onChange={(e) => setYear(Number(e.target.value))}
-                className="w-full rounded-lg border border-slate-200 px-3 py-2.5 text-sm outline-none ring-0 transition focus:border-primary focus:ring-1 focus:ring-primary"
+                className="input-base"
               >
                 {YEARS.map((y) => (
                   <option key={y} value={y}>
@@ -310,7 +310,7 @@ export default function SummaryPage({ params }: SummaryPageProps) {
                   <select
                     value={selectedWeekStart}
                     onChange={(e) => setSelectedWeekStart(e.target.value)}
-                    className="w-full rounded-lg border border-slate-200 px-3 py-2.5 text-sm outline-none ring-0 transition focus:border-primary focus:ring-1 focus:ring-primary"
+                    className="input-base"
                   >
                     {weeks.map((w) => (
                       <option key={w.start} value={w.start}>
@@ -392,7 +392,7 @@ export default function SummaryPage({ params }: SummaryPageProps) {
           <button
             type="submit"
             disabled={isLoading}
-            className="mt-2 inline-flex items-center justify-center rounded-lg bg-primary px-4 py-2.5 text-sm font-medium text-white shadow-sm hover:bg-blue-600 disabled:cursor-not-allowed disabled:opacity-70"
+            className="btn-primary mt-2 disabled:cursor-not-allowed"
           >
             {isLoading ? "生成中..." : "⚡ 生成总结"}
           </button>

@@ -115,6 +115,7 @@ export type CachedTask = {
   description: string;
   isCompleted: boolean;
   weekStart: string;
+  completedAt: string | null;
   subTasks: {
     id: string;
     taskId: string;

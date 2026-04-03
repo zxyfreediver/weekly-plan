@@ -59,7 +59,7 @@ export const metadata: Metadata = {
 };
 
 export const viewport: Viewport = {
-  themeColor: "#2563eb",
+  themeColor: "#8fd7d0",
 };
 
 export default function RootLayout({
@@ -69,26 +69,41 @@ export default function RootLayout({
 }) {
   return (
     <html lang="zh-CN">
-      <body className="flex min-h-screen w-full flex-col bg-background">
-        <header className="shrink-0 border-b border-slate-200 bg-white">
-          <div className="mx-auto flex h-14 w-full max-w-6xl items-center justify-between px-4">
+      <body className="relative flex min-h-screen w-full flex-col overflow-x-hidden bg-background">
+        <div
+          aria-hidden
+          className="pointer-events-none fixed inset-0 -z-10 overflow-hidden"
+        >
+          <div className="absolute -left-24 -top-20 h-72 w-72 rounded-full bg-emerald-200/35 blur-3xl" />
+          <div className="absolute right-[-5rem] top-10 h-80 w-80 rounded-full bg-sky-200/35 blur-3xl" />
+          <div className="absolute bottom-[-7rem] left-1/3 h-96 w-96 rounded-full bg-cyan-100/35 blur-3xl" />
+        </div>
+        <header className="sticky top-0 z-40 shrink-0 border-b border-white/60 bg-white/68 backdrop-blur-xl">
+          <div className="mx-auto flex h-16 w-full max-w-[1160px] items-center justify-between px-4 sm:px-6 lg:px-8">
             <Link
               href="/"
-              className="flex items-center gap-2 text-sm font-semibold text-slate-800 transition-opacity duration-200 hover:opacity-80"
+              className="flex items-center gap-3 no-underline transition-opacity duration-200 hover:opacity-90"
             >
-              <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary text-white text-lg">
+              <span className="flex h-10 w-10 items-center justify-center rounded-2xl bg-[linear-gradient(135deg,rgba(103,183,255,0.96),rgba(45,168,150,0.96))] text-lg text-white shadow-[0_12px_24px_rgba(103,183,255,0.28)]">
                 📅
               </span>
-              <span>周记清单</span>
+              <span className="flex flex-col">
+                <span className="text-sm font-semibold tracking-[0.02em] text-slate-800">
+                  周记清单
+                </span>
+                <span className="hidden text-[11px] text-slate-400 sm:inline">
+                  Weekly Focus Workspace
+                </span>
+              </span>
             </Link>
             <HeaderUser />
           </div>
         </header>
-        <main className="mx-auto w-full max-w-6xl flex-1 px-4 py-8 transition-opacity duration-200">
+        <main className="mx-auto w-full max-w-[1160px] flex-1 px-4 py-6 transition-opacity duration-200 sm:px-6 sm:py-8 lg:px-8 lg:py-10">
           {children}
         </main>
-        <footer className="mt-auto shrink-0 border-t border-slate-200 bg-white">
-          <div className="mx-auto flex h-12 w-full max-w-6xl items-center justify-center px-4 text-xs text-slate-400">
+        <footer className="mt-auto shrink-0 border-t border-white/60 bg-white/46 backdrop-blur-sm">
+          <div className="mx-auto flex h-14 w-full max-w-[1160px] items-center justify-center px-4 text-xs text-slate-400 sm:px-6 lg:px-8">
             © {new Date().getFullYear()} 周记清单 · Keep organized, stay productive.
           </div>
         </footer>

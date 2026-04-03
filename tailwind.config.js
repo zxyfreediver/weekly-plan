@@ -8,16 +8,16 @@ module.exports = {
     extend: {
       colors: {
         primary: {
-          DEFAULT: "#2563eb",
-          soft: "#eff6ff",
+          DEFAULT: "#2da896",
+          soft: "#ecfbf7",
         },
         background: {
-          DEFAULT: "#f8fafc",
+          DEFAULT: "#f7fbfa",
         },
       },
       boxShadow: {
-        card: "0 1px 3px rgba(15,23,42,0.08)",
-        "card-hover": "0 4px 12px rgba(15,23,42,0.12)",
+        card: "0 18px 45px rgba(148,163,184,0.14)",
+        "card-hover": "0 24px 60px rgba(148,163,184,0.2)",
       },
       borderRadius: {
         "md-plus": "10px",
@@ -48,5 +48,4 @@ module.exports = {
   },
   plugins: [],
 };
-
 

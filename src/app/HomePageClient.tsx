@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import useSWR from "swr";
-import { FormEvent, useState } from "react";
+import { FormEvent, useMemo, useState } from "react";
 
 type CategoryWithStats = {
   id: string;
@@ -69,6 +69,15 @@ export function HomePageClient() {
   const [name, setName] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const totalTasks = useMemo(
+    () => categories.reduce((sum, category) => sum + category.taskCount, 0),
+    [categories],
+  );
+  const totalCompleted = useMemo(
+    () => categories.reduce((sum, category) => sum + category.completedCount, 0),
+    [categories],
+  );
+  const completionRate = totalTasks === 0 ? 0 : Math.round((totalCompleted / totalTasks) * 100);
 
   const openCreate = () => {
     setEditTarget(null);
@@ -132,13 +141,23 @@ export function HomePageClient() {
   if (isLoading) {
     return (
       <div className="space-y-6">
-        <div className="h-8 w-48 rounded bg-slate-100 skeleton" />
+        <div className="surface-panel space-y-4 px-6 py-6 sm:px-7 sm:py-7">
+          <div className="h-5 w-24 rounded-full skeleton" />
+          <div className="h-10 w-56 rounded-2xl skeleton" />
+          <div className="h-4 w-72 rounded skeleton" />
+          <div className="flex flex-wrap gap-2">
+            {[1, 2, 3].map((i) => (
+              <div key={i} className="h-8 w-24 rounded-full skeleton" />
+            ))}
+          </div>
+        </div>
         <div className="grid gap-4 md:grid-cols-3">
           {[1, 2, 3].map((i) => (
-            <div key={i} className="card flex flex-col gap-3 p-4">
-              <div className="h-10 w-10 rounded-lg bg-slate-100 skeleton" />
+            <div key={i} className="card flex flex-col gap-4 p-5">
+              <div className="h-12 w-12 rounded-2xl bg-slate-100 skeleton" />
               <div className="h-4 w-24 rounded bg-slate-100 skeleton" />
-              <div className="h-1.5 rounded-full bg-slate-100 skeleton" />
+              <div className="h-3 w-40 rounded bg-slate-100 skeleton" />
+              <div className="h-2 rounded-full bg-slate-100 skeleton" />
             </div>
           ))}
         </div>
@@ -149,12 +168,17 @@ export function HomePageClient() {
   if (fetchError) {
     return (
       <div className="space-y-6">
-        <div>
-          <h1 className="text-2xl font-semibold text-slate-900">我的分类</h1>
-          <p className="mt-1 text-sm text-slate-500">
-            管理你的每周任务与目标
+        <section className="surface-panel px-6 py-6 sm:px-7 sm:py-7">
+          <div className="text-xs font-medium uppercase tracking-[0.18em] text-primary/70">
+            Workspace
+          </div>
+          <h1 className="mt-3 text-3xl font-semibold tracking-tight text-slate-900">
+            我的分类
+          </h1>
+          <p className="mt-2 text-sm leading-6 text-slate-500">
+            管理你的每周任务与目标。
           </p>
-        </div>
+        </section>
         <div className="card py-12 text-center text-sm text-slate-500">
           {fetchError instanceof Error ? fetchError.message : "分类加载失败"}
         </div>
@@ -164,45 +188,73 @@ export function HomePageClient() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-semibold text-slate-900">我的分类</h1>
-          <p className="mt-1 text-sm text-slate-500">
-            管理你的每周任务与目标
-          </p>
+      <section className="surface-panel overflow-hidden px-6 py-6 sm:px-7 sm:py-7">
+        <div className="flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
+          <div className="space-y-4">
+            <div className="text-xs font-medium uppercase tracking-[0.18em] text-primary/70">
+              Workspace
+            </div>
+            <div>
+              <h1 className="text-3xl font-semibold tracking-tight text-slate-900 sm:text-4xl">
+                我的分类
+              </h1>
+              <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-500">
+                先按领域整理，再进入每周清单。工作、生活、年度目标都可以拆成独立空间。
+              </p>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <span className="stat-pill">{categories.length} 个分类</span>
+              <span className="stat-pill">{totalTasks} 项任务</span>
+              <span className="stat-pill">{totalCompleted} 项已完成</span>
+            </div>
+          </div>
+
+          <div className="card min-w-[260px] max-w-sm px-5 py-5">
+            <div className="text-xs font-medium uppercase tracking-[0.16em] text-slate-400">
+              Overview
+            </div>
+            <div className="mt-3 flex items-end justify-between gap-4">
+              <div>
+                <div className="text-3xl font-semibold text-slate-900">
+                  {completionRate}%
+                </div>
+                <p className="mt-1 text-sm text-slate-500">
+                  当前分类整体完成度
+                </p>
+              </div>
+              <button type="button" onClick={openCreate} className="btn-primary">
+                + 新建分类
+              </button>
+            </div>
+            <div className="mt-4 h-2 rounded-full bg-slate-100">
+              <div
+                className="h-2 rounded-full bg-[linear-gradient(135deg,#67b7ff,#2da896)]"
+                style={{ width: `${completionRate}%` }}
+              />
+            </div>
+          </div>
         </div>
-        <button
-          type="button"
-          onClick={openCreate}
-          className="btn-primary"
-        >
-          + 新建分类
-        </button>
-      </div>
+      </section>
 
       {categories.length === 0 ? (
-        <div className="card flex flex-col items-center justify-center gap-4 px-6 py-12 text-center">
-          <div className="flex h-14 w-14 items-center justify-center rounded-full bg-slate-100 text-3xl">
+        <div className="card flex flex-col items-center justify-center gap-4 px-6 py-14 text-center">
+          <div className="icon-badge h-16 w-16 rounded-full text-3xl">
             📁
           </div>
           <div className="space-y-1">
-            <div className="text-sm font-medium text-slate-900">
+            <div className="text-base font-medium text-slate-900">
               还没有分类
             </div>
-            <div className="text-xs text-slate-500">
+            <div className="max-w-sm text-sm leading-6 text-slate-500">
               点击下方按钮创建第一个分类，开始管理你的周度任务
             </div>
           </div>
-          <button
-            type="button"
-            onClick={openCreate}
-            className="btn-primary"
-          >
+          <button type="button" onClick={openCreate} className="btn-primary">
             新建分类
           </button>
         </div>
       ) : (
-        <div className="grid gap-4 md:grid-cols-3">
+        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
           {categories.map((category) => {
             const progress =
               category.taskCount === 0
@@ -212,10 +264,10 @@ export function HomePageClient() {
               <Link
                 key={category.id}
                 href={`/${category.id}`}
-                className="card card-hover flex flex-col gap-3 p-4 block"
+                className="card card-hover group flex h-full flex-col gap-5 p-5 no-underline"
               >
                 <div className="flex items-start justify-between">
-                  <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10 text-xl">
+                  <div className="icon-badge">
                     📁
                   </div>
                   <button
@@ -225,29 +277,37 @@ export function HomePageClient() {
                       e.stopPropagation();
                       openEdit(category, e);
                     }}
-                    className="rounded p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-600"
+                    className="btn-ghost h-9 w-9 p-0 text-base text-slate-400 hover:text-slate-600"
                     title="编辑"
                   >
                     ✏️
                   </button>
                 </div>
-                <div className="space-y-1">
-                  <div className="text-sm font-semibold text-slate-900">
-                    {category.name}
+                <div className="space-y-2">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <div className="text-base font-semibold text-slate-900 transition-colors duration-200 group-hover:text-slate-950">
+                      {category.name}
+                    </div>
+                    <span className="rounded-full bg-primary/10 px-2.5 py-1 text-[11px] font-medium text-primary">
+                      {category.taskCount === 0
+                        ? "空白"
+                        : `${category.completedCount}/${category.taskCount}`}
+                    </span>
                   </div>
-                  <div className="text-xs text-slate-500">
-                    {category.taskCount} 个待办任务
+                  <div className="text-sm leading-6 text-slate-500">
+                    {category.taskCount} 个待办任务，适合按周持续推进。
                   </div>
                 </div>
-                <div className="mt-2 space-y-1">
-                  <div className="h-1.5 rounded-full bg-slate-100">
+                <div className="mt-auto space-y-2">
+                  <div className="flex items-center justify-between text-xs text-slate-500">
+                    <span>完成进度</span>
+                    <span>{Math.round(progress * 100)}%</span>
+                  </div>
+                  <div className="h-2 rounded-full bg-slate-100">
                     <div
-                      className="h-1.5 rounded-full bg-primary"
+                      className="h-2 rounded-full bg-[linear-gradient(135deg,#67b7ff,#2da896)]"
                       style={{ width: `${progress * 100}%` }}
                     />
-                  </div>
-                  <div className="text-right text-xs text-slate-500">
-                    {Math.round(progress * 100)}%
                   </div>
                 </div>
               </Link>
@@ -258,17 +318,17 @@ export function HomePageClient() {
 
       {modalOpen && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 animate-fade-in"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/18 p-4 backdrop-blur-sm animate-fade-in"
           onClick={() => !submitting && setModalOpen(false)}
         >
           <div
-            className="card w-full max-w-md p-6 animate-scale-in"
+            className="modal-panel w-full max-w-md p-6 animate-scale-in"
             onClick={(e) => e.stopPropagation()}
           >
             <h2 className="text-lg font-semibold text-slate-900">
               {editTarget ? "编辑分类" : "新建分类"}
             </h2>
-            <p className="mt-1 text-xs text-slate-500">
+            <p className="mt-1 text-sm text-slate-500">
               输入分类名称，如：工作、生活、家庭
             </p>
             {error && (
@@ -289,7 +349,7 @@ export function HomePageClient() {
                 <button
                   type="button"
                   onClick={() => !submitting && setModalOpen(false)}
-                  className="rounded-lg border border-slate-200 px-4 py-2 text-sm text-slate-600 hover:bg-slate-50"
+                  className="btn-secondary"
                 >
                   取消
                 </button>
@@ -315,7 +375,7 @@ export function HomePageClient() {
 
       {categories.length > 0 && (
         <div className="mt-4 text-center text-xs text-slate-400">
-          管理分类显示设置
+          进入分类后可继续拆分子分类和周任务。
         </div>
       )}
     </div>

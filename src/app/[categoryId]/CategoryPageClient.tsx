@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import useSWR from "swr";
-import { FormEvent, useState } from "react";
+import { FormEvent, useMemo, useState } from "react";
 
 type SubCategory = {
   id: string;
@@ -15,10 +15,7 @@ type CategoryData = {
   subCategories: SubCategory[];
 };
 
-function getErrorMessage(
-  payload: unknown,
-  fallback: string,
-): string {
+function getErrorMessage(payload: unknown, fallback: string): string {
   if (
     payload &&
     typeof payload === "object" &&
@@ -84,6 +81,10 @@ export function CategoryPageClient({ categoryId }: { categoryId: string }) {
   const [editTarget, setEditTarget] = useState<SubCategory | null>(null);
   const [name, setName] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const totalPending = useMemo(
+    () => subCategories.reduce((sum, subCategory) => sum + subCategory.pendingCount, 0),
+    [subCategories],
+  );
 
   const openCreate = () => {
     setEditTarget(null);
@@ -147,12 +148,19 @@ export function CategoryPageClient({ categoryId }: { categoryId: string }) {
   if (isLoading) {
     return (
       <div className="space-y-6">
-        <nav className="h-4 w-48 rounded bg-slate-100 skeleton" />
+        <div className="surface-panel space-y-4 px-6 py-6 sm:px-7 sm:py-7">
+          <div className="h-5 w-32 rounded-full skeleton" />
+          <div className="h-10 w-56 rounded-2xl skeleton" />
+          <div className="h-4 w-72 rounded skeleton" />
+        </div>
         <div className="space-y-3">
           {[1, 2, 3, 4].map((i) => (
-            <div key={i} className="card flex items-center gap-3 px-4 py-4">
-              <div className="h-9 w-9 rounded-lg bg-slate-100 skeleton" />
-              <div className="h-4 w-32 rounded bg-slate-100 skeleton" />
+            <div key={i} className="card flex items-center gap-4 px-5 py-5">
+              <div className="h-12 w-12 rounded-2xl bg-slate-100 skeleton" />
+              <div className="min-w-0 flex-1 space-y-2">
+                <div className="h-4 w-32 rounded bg-slate-100 skeleton" />
+                <div className="h-3 w-24 rounded bg-slate-100 skeleton" />
+              </div>
             </div>
           ))}
         </div>
@@ -163,11 +171,16 @@ export function CategoryPageClient({ categoryId }: { categoryId: string }) {
   if (fetchError) {
     return (
       <div className="space-y-6">
-        <nav className="text-xs text-slate-500">
-          <Link href="/" className="hover:text-slate-700 hover:underline">
-            首页
-          </Link>
-        </nav>
+        <section className="surface-panel px-6 py-6 sm:px-7 sm:py-7">
+          <nav className="flex flex-wrap items-center gap-2 text-xs text-slate-500">
+            <Link href="/" className="stat-pill no-underline hover:text-slate-700">
+              首页
+            </Link>
+          </nav>
+          <h1 className="mt-4 text-3xl font-semibold tracking-tight text-slate-900">
+            分类工作区
+          </h1>
+        </section>
         <div className="card py-12 text-center text-sm text-slate-500">
           {fetchError instanceof Error ? fetchError.message : "分类加载失败"}
         </div>
@@ -177,50 +190,66 @@ export function CategoryPageClient({ categoryId }: { categoryId: string }) {
 
   return (
     <div className="space-y-6">
-      <nav className="text-xs text-slate-500">
-        <Link href="/" className="hover:text-slate-700 hover:underline">
-          首页
-        </Link>
-        <span className="mx-1.5">/</span>
-        <span className="text-slate-700">{categoryName}</span>
-      </nav>
+      <section className="surface-panel overflow-hidden px-6 py-6 sm:px-7 sm:py-7">
+        <div className="flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
+          <div className="space-y-4">
+            <nav className="flex flex-wrap items-center gap-2 text-xs text-slate-500">
+              <Link href="/" className="stat-pill no-underline hover:text-slate-700">
+                首页
+              </Link>
+              <span className="text-slate-300">/</span>
+              <span className="stat-pill border-primary/10 bg-primary/10 text-primary">
+                {categoryName}
+              </span>
+            </nav>
+            <div>
+              <div className="text-xs font-medium uppercase tracking-[0.18em] text-primary/70">
+                Category
+              </div>
+              <h1 className="mt-3 text-3xl font-semibold tracking-tight text-slate-900 sm:text-4xl">
+                {categoryName}
+              </h1>
+              <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-500">
+                用子分类拆开不同年份、项目或主题，再进入每周清单持续推进。
+              </p>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <span className="stat-pill">{subCategories.length} 个子分类</span>
+              <span className="stat-pill">{totalPending} 项待办</span>
+            </div>
+          </div>
 
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-semibold text-slate-900">
-            {categoryName}
-          </h1>
-          <p className="mt-1 text-sm text-slate-500">
-            管理你的{categoryName}子分类
-          </p>
+          <div className="card min-w-[250px] max-w-sm px-5 py-5">
+            <div className="text-xs font-medium uppercase tracking-[0.16em] text-slate-400">
+              Scope
+            </div>
+            <div className="mt-3 text-3xl font-semibold text-slate-900">
+              {subCategories.length}
+            </div>
+            <p className="mt-1 text-sm text-slate-500">
+              当前分类下的工作区数量
+            </p>
+            <button type="button" onClick={openCreate} className="btn-primary mt-4">
+              + 新建子分类
+            </button>
+          </div>
         </div>
-        <button
-          type="button"
-          onClick={openCreate}
-          className="btn-primary"
-        >
-          + 新建子分类
-        </button>
-      </div>
+      </section>
 
       {subCategories.length === 0 ? (
-        <div className="card flex flex-col items-center justify-center gap-3 px-6 py-10 text-center">
-          <div className="flex h-12 w-12 items-center justify-center rounded-full bg-slate-100 text-2xl">
+        <div className="card flex flex-col items-center justify-center gap-3 px-6 py-12 text-center">
+          <div className="icon-badge h-16 w-16 rounded-full text-2xl">
             📂
           </div>
           <div className="space-y-1">
-            <div className="text-sm font-medium text-slate-900">
+            <div className="text-base font-medium text-slate-900">
               还没有子分类
             </div>
-            <div className="text-xs text-slate-500">
+            <div className="max-w-sm text-sm leading-6 text-slate-500">
               创建第一个子分类，开始记录你的周度任务
             </div>
           </div>
-          <button
-            type="button"
-            onClick={openCreate}
-            className="btn-primary mt-2 text-xs"
-          >
+          <button type="button" onClick={openCreate} className="btn-primary mt-2">
             新建子分类
           </button>
         </div>
@@ -230,18 +259,21 @@ export function CategoryPageClient({ categoryId }: { categoryId: string }) {
             <Link
               key={sub.id}
               href={`/${categoryId}/${sub.id}`}
-              className="card card-hover flex items-center justify-between px-4 py-4"
+              className="card card-hover group flex items-center justify-between gap-4 px-5 py-5 no-underline"
             >
               <div className="flex flex-1 items-center gap-3">
-                <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary/10 text-lg">
-                  📁
-                </div>
-                <div>
-                  <div className="text-sm font-semibold text-slate-900">
-                    {sub.name}
+                <div className="icon-badge">📁</div>
+                <div className="min-w-0 flex-1">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <div className="truncate text-base font-semibold text-slate-900 transition-colors duration-200 group-hover:text-slate-950">
+                      {sub.name}
+                    </div>
+                    <span className="rounded-full bg-primary/10 px-2.5 py-1 text-[11px] font-medium text-primary">
+                      {sub.pendingCount} 项待办
+                    </span>
                   </div>
-                  <div className="text-xs text-slate-500">
-                    {sub.pendingCount} 个待办事项
+                  <div className="mt-1 text-sm leading-6 text-slate-500">
+                    进入后按周查看主任务、子任务和进度拆分。
                   </div>
                 </div>
               </div>
@@ -252,7 +284,7 @@ export function CategoryPageClient({ categoryId }: { categoryId: string }) {
                   e.stopPropagation();
                   openEdit(sub, e);
                 }}
-                className="rounded p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-600"
+                className="btn-ghost h-9 w-9 p-0 text-base text-slate-400 hover:text-slate-600"
                 title="编辑"
               >
                 ✏️
@@ -264,18 +296,18 @@ export function CategoryPageClient({ categoryId }: { categoryId: string }) {
 
       {modalOpen && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/18 p-4 backdrop-blur-sm animate-fade-in"
           onClick={() => !submitting && setModalOpen(false)}
         >
           <div
-            className="card w-full max-w-md p-6"
+            className="modal-panel w-full max-w-md p-6 animate-scale-in"
             onClick={(e) => e.stopPropagation()}
           >
             <h2 className="text-lg font-semibold text-slate-900">
               {editTarget ? "编辑子分类" : "新建子分类"}
             </h2>
-            <p className="mt-1 text-xs text-slate-500">
-              输入子分类名称，如：2025年工作、2026年工作
+            <p className="mt-1 text-sm text-slate-500">
+              输入子分类名称，例如：2026、求职、个人成长
             </p>
             {formError && (
               <div className="mt-3 rounded-md bg-red-50 px-3 py-2 text-xs text-red-600">
@@ -295,7 +327,7 @@ export function CategoryPageClient({ categoryId }: { categoryId: string }) {
                 <button
                   type="button"
                   onClick={() => !submitting && setModalOpen(false)}
-                  className="rounded-lg border border-slate-200 px-4 py-2 text-sm text-slate-600 hover:bg-slate-50"
+                  className="btn-secondary"
                 >
                   取消
                 </button>
