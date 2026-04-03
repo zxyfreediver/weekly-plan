@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { use, useEffect, useMemo, useState } from "react";
+import { startTransition, use, useEffect, useMemo, useState } from "react";
 import { StarIcon } from "@/components/StarIcon";
 import * as taskCache from "@/lib/taskCache";
 
@@ -36,6 +36,31 @@ type Task = {
   isCompleted: boolean;
   weekStart: string;
   subTasks: SubTask[];
+};
+
+type TaskStats = {
+  total: number;
+  completed: number;
+  importantPending: number;
+  unimportantPending: number;
+  hasUrgent: boolean;
+  hasOverdue: boolean;
+};
+
+type SubTaskView = {
+  subTask: SubTask;
+  isEffectivePriority: boolean;
+  isDueDateUrgent: boolean;
+  isDueDateOverdue: boolean;
+  visibleProgress: Progress[];
+};
+
+type TaskView = {
+  task: Task;
+  stats: TaskStats;
+  visibleSubTasks: SubTaskView[];
+  subTaskCountLabel: string | null;
+  summaryText: string;
 };
 
 interface WeeklyTasksPageProps {
@@ -102,6 +127,150 @@ function getInitialWeekStart(): string {
   return toDateString(monday);
 }
 
+function getDueDateStatus(dueDate: string | null) {
+  if (!dueDate) return null;
+
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const due = new Date(dueDate);
+  due.setHours(0, 0, 0, 0);
+  const diffMs = due.getTime() - today.getTime();
+  const diffDays = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
+
+  if (diffDays < 0) return "overdue";
+  if (diffDays <= 3) return "urgent";
+  return null;
+}
+
+function sortSubTasks(subTasks: SubTask[]): SubTask[] {
+  return [...subTasks].sort((a, b) => {
+    if (a.isCompleted !== b.isCompleted) return a.isCompleted ? 1 : -1;
+    if (a.isPriority !== b.isPriority) return a.isPriority ? -1 : 1;
+    return 0;
+  });
+}
+
+function sortProgressItems(progress: Progress[]): Progress[] {
+  return [...progress].sort((a, b) => {
+    if (a.isCompleted !== b.isCompleted) return a.isCompleted ? 1 : -1;
+    if (a.isPriority !== b.isPriority) return a.isPriority ? -1 : 1;
+    return 0;
+  });
+}
+
+function buildTaskView(task: Task, hideCompleted: boolean, sortSubItems: boolean): TaskView {
+  let completed = 0;
+  let importantPending = 0;
+  let unimportantPending = 0;
+  let hasUrgent = false;
+  let hasOverdue = false;
+
+  const visibleSubTasks: SubTaskView[] = [];
+
+  for (const subTask of sortSubItems ? sortSubTasks(task.subTasks) : task.subTasks) {
+    const sortedProgress = sortSubItems ? sortProgressItems(subTask.progress ?? []) : (subTask.progress ?? []);
+    const visibleProgress: Progress[] = [];
+    let progressHasPriorityPending = false;
+    let progressHasUrgent = false;
+    let progressHasOverdue = false;
+
+    for (const progress of sortedProgress) {
+      if (!hideCompleted || !progress.isCompleted) {
+        visibleProgress.push(progress);
+      }
+
+      if (progress.isCompleted) {
+        continue;
+      }
+
+      if (progress.isPriority) {
+        progressHasPriorityPending = true;
+      }
+
+      const progressDueStatus = getDueDateStatus(progress.dueDate);
+      if (progressDueStatus === "overdue") {
+        progressHasOverdue = true;
+      } else if (progressDueStatus === "urgent") {
+        progressHasUrgent = true;
+      }
+    }
+
+    const subTaskDueStatus = !subTask.isCompleted
+      ? getDueDateStatus(subTask.dueDate ?? null)
+      : null;
+    const isDueDateOverdue =
+      subTaskDueStatus === "overdue" || progressHasOverdue;
+    const isDueDateUrgent =
+      !isDueDateOverdue &&
+      (subTaskDueStatus === "urgent" || progressHasUrgent);
+    const isEffectivePriority =
+      subTask.isPriority || progressHasPriorityPending;
+
+    if (subTask.isCompleted) {
+      completed += 1;
+    } else if (isEffectivePriority) {
+      importantPending += 1;
+    } else {
+      unimportantPending += 1;
+    }
+
+    if (isDueDateOverdue) {
+      hasOverdue = true;
+    }
+    if (isDueDateUrgent) {
+      hasUrgent = true;
+    }
+
+    if (!hideCompleted || !subTask.isCompleted) {
+      visibleSubTasks.push({
+        subTask,
+        isEffectivePriority,
+        isDueDateUrgent,
+        isDueDateOverdue,
+        visibleProgress,
+      });
+    }
+  }
+
+  const stats: TaskStats = {
+    total: task.subTasks.length,
+    completed,
+    importantPending,
+    unimportantPending,
+    hasUrgent,
+    hasOverdue,
+  };
+
+  let summaryText = "暂无子任务";
+  if (stats.total > 0) {
+    const parts: string[] = [];
+    if (stats.importantPending > 0) {
+      parts.push(`${stats.importantPending} 高优未完成`);
+    }
+    if (stats.hasOverdue) {
+      parts.push("含逾期");
+    } else if (stats.hasUrgent) {
+      parts.push("含临期");
+    }
+    if (stats.unimportantPending > 0) {
+      parts.push(`${stats.unimportantPending} 普通未完成`);
+    }
+    if (stats.completed > 0) {
+      parts.push(`${stats.completed} 已完成`);
+    }
+    summaryText = parts.join(" · ");
+  }
+
+  return {
+    task,
+    stats,
+    visibleSubTasks,
+    subTaskCountLabel:
+      stats.total > 0 ? `（共 ${stats.total} 子任务）` : null,
+    summaryText,
+  };
+}
+
 export default function WeeklyTasksPage({ params }: WeeklyTasksPageProps) {
   const { categoryId, subCategoryId } = use(params);
   const [selectedWeekStart, setSelectedWeekStart] = useState(getInitialWeekStart);
@@ -153,19 +322,6 @@ export default function WeeklyTasksPage({ params }: WeeklyTasksPageProps) {
   const [addProgressLoading, setAddProgressLoading] = useState<string | null>(null);
   const [saveToast, setSaveToast] = useState<string | null>(null);
 
-  const getDueDateStatus = (dueDate: string | null) => {
-    if (!dueDate) return null;
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    const due = new Date(dueDate);
-    due.setHours(0, 0, 0, 0);
-    const diffMs = due.getTime() - today.getTime();
-    const diffDays = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
-    if (diffDays < 0) return "overdue";
-    if (diffDays <= 3) return "urgent";
-    return null;
-  };
-
   const formatDueDate = (dueDate: string | null) => {
     if (!dueDate) return "";
     const [y, m, d] = dueDate.split("-").map(Number);
@@ -182,15 +338,21 @@ export default function WeeklyTasksPage({ params }: WeeklyTasksPageProps) {
   );
   const weeksInYear = useMemo(() => getWeeksInYear(selectedYear), [selectedYear]);
 
+  const selectWeekStart = (weekStart: string) => {
+    startTransition(() => {
+      setSelectedWeekStart(weekStart);
+    });
+  };
+
   const goPrevWeek = () => {
     const d = new Date(selectedWeekStart + "T00:00:00");
     d.setDate(d.getDate() - 7);
-    setSelectedWeekStart(toDateString(d));
+    selectWeekStart(toDateString(d));
   };
   const goNextWeek = () => {
     const d = new Date(selectedWeekStart + "T00:00:00");
     d.setDate(d.getDate() + 7);
-    setSelectedWeekStart(toDateString(d));
+    selectWeekStart(toDateString(d));
   };
 
   useEffect(() => {
@@ -309,56 +471,29 @@ export default function WeeklyTasksPage({ params }: WeeklyTasksPageProps) {
     }
   };
 
-  const isEffectivePriority = (st: SubTask) =>
-    st.isPriority ||
-    (st.progress?.some((p) => p.isPriority && !p.isCompleted) ?? false);
+  const taskViews = useMemo(
+    () => tasks.map((task) => buildTaskView(task, hideCompleted, expandedTaskIds.has(task.id))),
+    [tasks, hideCompleted, expandedTaskIds],
+  );
 
-  const isEffectiveDueDateUrgent = (st: SubTask) =>
-    (!st.isCompleted && getDueDateStatus(st.dueDate ?? null) === "urgent") ||
-    (st.progress?.some(
-      (p) => !p.isCompleted && getDueDateStatus(p.dueDate) === "urgent",
-    ) ?? false);
-
-  const isEffectiveDueDateOverdue = (st: SubTask) =>
-    (!st.isCompleted && getDueDateStatus(st.dueDate ?? null) === "overdue") ||
-    (st.progress?.some(
-      (p) => !p.isCompleted && getDueDateStatus(p.dueDate) === "overdue",
-    ) ?? false);
-
-  const hasTaskDueDateUrgent = (task: Task) =>
-    task.subTasks.some((s) => isEffectiveDueDateUrgent(s));
-
-  const hasTaskDueDateOverdue = (task: Task) =>
-    task.subTasks.some((s) => isEffectiveDueDateOverdue(s));
-
-  const getTaskStats = (task: Task) => {
-    const total = task.subTasks.length;
-    const completed = task.subTasks.filter((s) => s.isCompleted).length;
-    const importantPending = task.subTasks.filter(
-      (s) => isEffectivePriority(s) && !s.isCompleted,
-    ).length;
-    const unimportantPending = task.subTasks.filter(
-      (s) => !s.isCompleted && !isEffectivePriority(s),
-    ).length;
-    return { total, completed, importantPending, unimportantPending };
-  };
-
-  const sortedTasks = useMemo(() => {
-    const copy = [...tasks];
+  const sortedTaskViews = useMemo(() => {
+    const copy = [...taskViews];
     copy.sort((a, b) => {
-      const ap = getTaskStats(a).importantPending;
-      const bp = getTaskStats(b).importantPending;
+      const ap = a.stats.importantPending;
+      const bp = b.stats.importantPending;
       if (ap !== bp) return bp - ap; // 高优先级未完成多的排前面
-      if (a.isCompleted !== b.isCompleted) return a.isCompleted ? 1 : -1; // 未完成排前面
+      if (a.task.isCompleted !== b.task.isCompleted) {
+        return a.task.isCompleted ? 1 : -1; // 未完成排前面
+      }
       return 0;
     });
     return copy;
-  }, [tasks]);
+  }, [taskViews]);
 
-  const displayTasks = useMemo(() => {
-    if (!hideCompleted) return sortedTasks;
-    return sortedTasks.filter((t) => !t.isCompleted);
-  }, [sortedTasks, hideCompleted]);
+  const displayTaskViews = useMemo(() => {
+    if (!hideCompleted) return sortedTaskViews;
+    return sortedTaskViews.filter(({ task }) => !task.isCompleted);
+  }, [sortedTaskViews, hideCompleted]);
 
   const handleToggleCompleted = async (task: Task) => {
     const nextCompleted = !task.isCompleted;
@@ -797,18 +932,18 @@ export default function WeeklyTasksPage({ params }: WeeklyTasksPageProps) {
   };
 
   const isAllExpanded = useMemo(() => {
-    if (tasks.length === 0) return false;
-    for (const t of tasks) {
-      if (!expandedTaskIds.has(t.id)) return false;
+    if (taskViews.length === 0) return false;
+    for (const { task } of taskViews) {
+      if (!expandedTaskIds.has(task.id)) return false;
     }
-    for (const t of tasks) {
-      for (const st of t.subTasks ?? []) {
+    for (const { task } of taskViews) {
+      for (const st of task.subTasks ?? []) {
         if ((st.progress ?? []).length > 0 && !expandedSubTaskIds.has(st.id))
           return false;
       }
     }
     return true;
-  }, [tasks, expandedTaskIds, expandedSubTaskIds]);
+  }, [taskViews, expandedTaskIds, expandedSubTaskIds]);
 
   const handleAddProgress = async (taskId: string, subTaskId: string) => {
     if (subTaskId.startsWith("temp_")) return;
@@ -1066,13 +1201,6 @@ export default function WeeklyTasksPage({ params }: WeeklyTasksPageProps) {
     }
   };
 
-  const sortedProgress = (progress: Progress[]) =>
-    [...(progress ?? [])].sort((a, b) => {
-      if (a.isCompleted !== b.isCompleted) return a.isCompleted ? 1 : -1;
-      if (a.isPriority !== b.isPriority) return a.isPriority ? -1 : 1;
-      return 0;
-    });
-
   const completedSummary = useMemo(() => {
     type SubTaskGroup = { subTask: SubTask; progress: Progress[] };
     const result: {
@@ -1194,13 +1322,6 @@ export default function WeeklyTasksPage({ params }: WeeklyTasksPageProps) {
     }
   };
 
-  const sortedSubTasks = (subTasks: SubTask[]) =>
-    [...subTasks].sort((a, b) => {
-      if (a.isCompleted !== b.isCompleted) return a.isCompleted ? 1 : -1;
-      if (a.isPriority !== b.isPriority) return a.isPriority ? -1 : 1;
-      return 0;
-    });
-
   return (
     <div className="space-y-6">
       <nav className="text-xs text-slate-500">
@@ -1239,7 +1360,9 @@ export default function WeeklyTasksPage({ params }: WeeklyTasksPageProps) {
               const y = Number(e.target.value);
               const weeks = getWeeksInYear(y);
               const inYear = weeks.find((w) => w.start === selectedWeekStart);
-              setSelectedWeekStart(inYear ? inYear.start : weeks[0]?.start ?? selectedWeekStart);
+              selectWeekStart(
+                inYear ? inYear.start : weeks[0]?.start ?? selectedWeekStart,
+              );
             }}
             className="rounded-lg border border-slate-200 bg-white px-2 py-1 text-xs text-slate-700"
           >
@@ -1280,7 +1403,7 @@ export default function WeeklyTasksPage({ params }: WeeklyTasksPageProps) {
                       key={w.start}
                       type="button"
                       onClick={() => {
-                        setSelectedWeekStart(w.start);
+                        selectWeekStart(w.start);
                         setWeekPickerOpen(false);
                       }}
                       className={`block w-full px-3 py-2 text-left text-xs hover:bg-slate-50 ${
@@ -1356,7 +1479,7 @@ export default function WeeklyTasksPage({ params }: WeeklyTasksPageProps) {
               </div>
             ))}
           </div>
-        ) : displayTasks.length === 0 ? (
+        ) : displayTaskViews.length === 0 ? (
           <div className="flex flex-col items-center justify-center gap-3 py-8 text-center animate-in">
             <div className="flex h-14 w-14 items-center justify-center rounded-full bg-slate-100 text-2xl">
               📝
@@ -1370,7 +1493,8 @@ export default function WeeklyTasksPage({ params }: WeeklyTasksPageProps) {
           </div>
         ) : (
           <ul className="text-sm">
-            {displayTasks.map((task) => (
+            {displayTaskViews.map(
+              ({ task, visibleSubTasks, subTaskCountLabel, summaryText }) => (
               <li key={task.id} className="border-b border-slate-100 py-2 last:border-b-0">
                 <div className="flex items-start justify-between gap-2">
                   <div className="flex min-w-0 flex-1 items-start gap-1.5">
@@ -1408,14 +1532,11 @@ export default function WeeklyTasksPage({ params }: WeeklyTasksPageProps) {
                         }`}
                       >
                         {task.content}
-                        {(() => {
-                          const { total } = getTaskStats(task);
-                          return total > 0 ? (
-                            <span className="text-xs font-normal text-slate-500">
-                              （共 {total} 子任务）
-                            </span>
-                          ) : null;
-                        })()}
+                        {subTaskCountLabel ? (
+                          <span className="text-xs font-normal text-slate-500">
+                            {subTaskCountLabel}
+                          </span>
+                        ) : null}
                       </span>
                       {(task.description ?? "") && (
                         <span
@@ -1427,35 +1548,7 @@ export default function WeeklyTasksPage({ params }: WeeklyTasksPageProps) {
                         </span>
                       )}
                       <span className="mt-0.5 block text-xs text-slate-500">
-                        {(() => {
-                          const {
-                            total,
-                            completed,
-                            importantPending,
-                            unimportantPending,
-                          } = getTaskStats(task);
-                          if (total === 0) {
-                            return "暂无子任务";
-                          }
-                          const parts: string[] = [];
-                          if (importantPending > 0) {
-                            parts.push(`${importantPending} 高优未完成`);
-                          }
-                          if (hasTaskDueDateOverdue(task)) {
-                            parts.push("含逾期");
-                          } else if (
-                            hasTaskDueDateUrgent(task)
-                          ) {
-                            parts.push("含临期");
-                          }
-                          if (unimportantPending > 0) {
-                            parts.push(`${unimportantPending} 普通未完成`);
-                          }
-                          if (completed > 0) {
-                            parts.push(`${completed} 已完成`);
-                          }
-                          return parts.join(" · ");
-                        })()}
+                        {summaryText}
                       </span>
                     </button>
                   </div>
@@ -1481,9 +1574,14 @@ export default function WeeklyTasksPage({ params }: WeeklyTasksPageProps) {
                 {expandedTaskIds.has(task.id) && (
                   <div className="mt-2 border-l border-slate-200 pl-3 ml-1">
                     <ul className="space-y-1">
-                        {sortedSubTasks(task.subTasks)
-                          .filter((st) => !hideCompleted || !st.isCompleted)
-                          .map((st) => (
+                        {visibleSubTasks.map(
+                          ({
+                            subTask: st,
+                            isEffectivePriority,
+                            isDueDateUrgent,
+                            isDueDateOverdue,
+                            visibleProgress,
+                          }) => (
                           <li key={st.id} className="py-0.5">
                             <div className="flex items-start gap-1">
                               <button
@@ -1524,18 +1622,17 @@ export default function WeeklyTasksPage({ params }: WeeklyTasksPageProps) {
                                   }`}
                                 >
                                   {st.content}
-                                  {isEffectivePriority(st) ? (
+                                  {isEffectivePriority ? (
                                     <span className="ml-1 text-xs text-amber-700">
                                       [高优]
                                     </span>
                                   ) : null}
-                                  {isEffectiveDueDateOverdue(st) && (
+                                  {isDueDateOverdue && (
                                     <span className="ml-1 text-xs text-red-600">
                                       逾期
                                     </span>
                                   )}
-                                  {isEffectiveDueDateUrgent(st) &&
-                                    !isEffectiveDueDateOverdue(st) && (
+                                  {isDueDateUrgent && !isDueDateOverdue && (
                                       <span className="ml-1 text-xs text-orange-700">
                                         临期
                                       </span>
@@ -1570,7 +1667,7 @@ export default function WeeklyTasksPage({ params }: WeeklyTasksPageProps) {
                                     handleToggleSubTaskPriority(task.id, st)
                                   }
                                   className={`rounded px-1 py-0.5 text-xs hover:bg-slate-100 ${
-                                    isEffectivePriority(st)
+                                    isEffectivePriority
                                       ? "text-amber-500"
                                       : "text-slate-300"
                                   }`}
@@ -1601,9 +1698,7 @@ export default function WeeklyTasksPage({ params }: WeeklyTasksPageProps) {
                             {expandedSubTaskIds.has(st.id) && (
                               <div className="mt-1 border-l border-slate-200 pl-3 ml-4">
                                 <ul className="space-y-0.5">
-                                  {sortedProgress(st.progress ?? [])
-                                    .filter((p) => !hideCompleted || !p.isCompleted)
-                                    .map((p) => (
+                                  {visibleProgress.map((p) => (
                                     <li
                                       key={p.id}
                                       className="flex items-start gap-2 py-0.5 text-xs"
@@ -1815,8 +1910,8 @@ export default function WeeklyTasksPage({ params }: WeeklyTasksPageProps) {
                               </div>
                             )}
                           </li>
-                          ))}
-                        </ul>
+                        ))}
+                    </ul>
                         {newSubTaskId === task.id ? (
                           <div className="mt-2 space-y-2 border border-slate-200 p-2">
                             <input

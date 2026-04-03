@@ -1,5 +1,21 @@
 import { supabase } from "@/lib/supabase";
 
+const SUPABASE_BATCH_LIMIT = 1000;
+
+async function batchQuery<T, R>(
+  ids: T[],
+  batchSize: number,
+  queryFn: (batch: T[]) => Promise<R[]>,
+): Promise<R[]> {
+  const results: R[] = [];
+  for (let i = 0; i < ids.length; i += batchSize) {
+    const batch = ids.slice(i, i + batchSize);
+    const batchResults = await queryFn(batch);
+    results.push(...batchResults);
+  }
+  return results;
+}
+
 export type Progress = {
   id: string;
   subTaskId: string;
@@ -11,26 +27,78 @@ export type Progress = {
   sortOrder: number;
 };
 
+type ProgressRow = {
+  id: string;
+  sub_task_id: string;
+  content: string;
+  assignee: string | null;
+  is_priority: boolean | null;
+  is_completed: boolean | null;
+  due_date: string | null;
+  sort_order: number | null;
+};
+
+function mapProgressRow(row: ProgressRow): Progress {
+  return {
+    id: row.id,
+    subTaskId: row.sub_task_id,
+    content: row.content,
+    assignee: row.assignee ?? "",
+    isPriority: Boolean(row.is_priority),
+    isCompleted: Boolean(row.is_completed),
+    dueDate: row.due_date ?? null,
+    sortOrder: row.sort_order ?? 0,
+  };
+}
+
+export async function getProgressBySubTaskIds(
+  subTaskIds: string[],
+): Promise<Map<string, Progress[]>> {
+  const progressBySubTaskId = new Map<string, Progress[]>();
+
+  if (subTaskIds.length === 0) {
+    return progressBySubTaskId;
+  }
+
+  for (const subTaskId of subTaskIds) {
+    progressBySubTaskId.set(subTaskId, []);
+  }
+
+  const rows = await batchQuery(
+    subTaskIds,
+    SUPABASE_BATCH_LIMIT,
+    async (batch) => {
+      const { data } = await supabase
+        .from("sub_task_progress")
+        .select("id, sub_task_id, content, assignee, is_priority, is_completed, due_date, sort_order")
+        .in("sub_task_id", batch)
+        .order("sub_task_id")
+        .order("sort_order")
+        .order("created_at");
+      return (data ?? []) as ProgressRow[];
+    },
+  );
+
+  for (const row of rows) {
+    const progress = mapProgressRow(row);
+    const current = progressBySubTaskId.get(progress.subTaskId);
+
+    if (current) {
+      current.push(progress);
+      continue;
+    }
+
+    progressBySubTaskId.set(progress.subTaskId, [progress]);
+  }
+
+  return progressBySubTaskId;
+}
+
 export async function getProgressBySubTaskId(
   subTaskId: string,
 ): Promise<Progress[]> {
-  const { data } = await supabase
-    .from("sub_task_progress")
-    .select("id, sub_task_id, content, assignee, is_priority, is_completed, due_date, sort_order")
-    .eq("sub_task_id", subTaskId)
-    .order("sort_order")
-    .order("created_at");
-
-  return (data ?? []).map((r) => ({
-    id: r.id,
-    subTaskId: r.sub_task_id,
-    content: r.content,
-    assignee: r.assignee ?? "",
-    isPriority: Boolean(r.is_priority),
-    isCompleted: Boolean(r.is_completed),
-    dueDate: r.due_date ?? null,
-    sortOrder: r.sort_order ?? 0,
-  }));
+  const progressBySubTaskId = await getProgressBySubTaskIds([subTaskId]);
+  return progressBySubTaskId.get(subTaskId) ?? [];
 }
 
 export async function createProgress(input: {

@@ -1,5 +1,5 @@
 import { supabase } from "@/lib/supabase";
-import { getSubTasksByTaskId } from "./sub_task";
+import { getSubTasksByTaskId, getSubTasksByTaskIds } from "./sub_task";
 import type { SubTask } from "./sub_task";
 
 export type Task = {
@@ -9,6 +9,14 @@ export type Task = {
   isCompleted: boolean;
   weekStart: string;
   subTasks: SubTask[];
+};
+
+type TaskRow = {
+  id: string;
+  content: string;
+  description: string | null;
+  is_completed: boolean | null;
+  week_start: string;
 };
 
 export async function getTasksForSubCategory(
@@ -23,19 +31,19 @@ export async function getTasksForSubCategory(
     .order("is_completed")
     .order("created_at");
 
-  const tasks: Task[] = [];
-  for (const r of data ?? []) {
-    const subTasks = await getSubTasksByTaskId(r.id);
-    tasks.push({
-      id: r.id,
-      content: r.content,
-      description: r.description ?? "",
-      isCompleted: Boolean(r.is_completed),
-      weekStart: r.week_start,
-      subTasks,
-    });
-  }
-  return tasks;
+  const taskRows = (data ?? []) as TaskRow[];
+  const subTasksByTaskId = await getSubTasksByTaskIds(
+    taskRows.map((task) => task.id),
+  );
+
+  return taskRows.map((task) => ({
+    id: task.id,
+    content: task.content,
+    description: task.description ?? "",
+    isCompleted: Boolean(task.is_completed),
+    weekStart: task.week_start,
+    subTasks: subTasksByTaskId.get(task.id) ?? [],
+  }));
 }
 
 export async function createTask(input: {

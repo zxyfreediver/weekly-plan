@@ -1,5 +1,22 @@
 import { supabase } from "@/lib/supabase";
 
+const SUPABASE_BATCH_LIMIT = 1000;
+
+async function batchQuery<T, R>(
+  ids: T[],
+  batchSize: number,
+  queryFn: (batch: T[]) => Promise<R[]>,
+  merge: (acc: R[], batch: R[]) => R[] = (acc, batch) => [...acc, ...batch],
+): Promise<R[]> {
+  const results: R[] = [];
+  for (let i = 0; i < ids.length; i += batchSize) {
+    const batch = ids.slice(i, i + batchSize);
+    const batchResults = await queryFn(batch);
+    results.push(...merge(results, batchResults));
+  }
+  return results;
+}
+
 export type CategoryWithStats = {
   id: string;
   name: string;
@@ -25,37 +42,65 @@ export async function getCategoriesWithStats(
 
   if (!categories?.length) return [];
 
-  const result: CategoryWithStats[] = [];
-  for (const c of categories) {
-    const { data: subs } = await supabase
-      .from("sub_categories")
-      .select("id")
-      .eq("category_id", c.id);
-    const subIds = (subs ?? []).map((s) => s.id);
-    if (subIds.length === 0) {
-      result.push({
-        id: c.id,
-        name: c.name,
+  const categoryIds = categories.map((category) => category.id);
+  const { data: subs } = await supabase
+    .from("sub_categories")
+    .select("id, category_id")
+    .in("category_id", categoryIds);
+
+  const subCategoryIdToCategoryId = new Map<string, string>();
+  for (const subCategory of subs ?? []) {
+    subCategoryIdToCategoryId.set(subCategory.id, subCategory.category_id);
+  }
+
+  const subCategoryIds = Array.from(subCategoryIdToCategoryId.keys());
+  const statsByCategoryId = new Map<
+    string,
+    { taskCount: number; completedCount: number }
+  >();
+
+  if (subCategoryIds.length > 0) {
+    const tasks = await batchQuery(
+      subCategoryIds,
+      SUPABASE_BATCH_LIMIT,
+      async (batch) => {
+        const { data } = await supabase
+          .from("tasks")
+          .select("sub_category_id, is_completed")
+          .in("sub_category_id", batch);
+        return data ?? [];
+      },
+    );
+
+    for (const task of tasks) {
+      const categoryId = subCategoryIdToCategoryId.get(task.sub_category_id);
+
+      if (!categoryId) {
+        continue;
+      }
+
+      const current = statsByCategoryId.get(categoryId) ?? {
         taskCount: 0,
         completedCount: 0,
-      });
-      continue;
+      };
+
+      current.taskCount += 1;
+      if (task.is_completed) {
+        current.completedCount += 1;
+      }
+      statsByCategoryId.set(categoryId, current);
     }
-    const { data: tasks } = await supabase
-      .from("tasks")
-      .select("id, is_completed")
-      .in("sub_category_id", subIds);
-    const taskCount = tasks?.length ?? 0;
-    const completedCount =
-      tasks?.filter((t) => t.is_completed).length ?? 0;
-    result.push({
-      id: c.id,
-      name: c.name,
-      taskCount,
-      completedCount,
-    });
   }
-  return result;
+
+  return categories.map((category) => {
+    const stats = statsByCategoryId.get(category.id);
+    return {
+      id: category.id,
+      name: category.name,
+      taskCount: stats?.taskCount ?? 0,
+      completedCount: stats?.completedCount ?? 0,
+    };
+  });
 }
 
 export async function getCategorySubCategories(
@@ -78,20 +123,39 @@ export async function getCategorySubCategories(
     .order("sort_order")
     .order("created_at");
 
-  const subCategories: SubCategory[] = [];
-  for (const sc of subs ?? []) {
-    const { data: tasks } = await supabase
-      .from("tasks")
-      .select("id, is_completed")
-      .eq("sub_category_id", sc.id);
-    const pendingCount =
-      tasks?.filter((t) => !t.is_completed).length ?? 0;
-    subCategories.push({
-      id: sc.id,
-      name: sc.name,
-      pendingCount,
-    });
+  const subCategoryIds = (subs ?? []).map((subCategory) => subCategory.id);
+  const pendingCountBySubCategoryId = new Map<string, number>();
+
+  if (subCategoryIds.length > 0) {
+    const tasks = await batchQuery(
+      subCategoryIds,
+      SUPABASE_BATCH_LIMIT,
+      async (batch) => {
+        const { data } = await supabase
+          .from("tasks")
+          .select("sub_category_id, is_completed")
+          .in("sub_category_id", batch);
+        return data ?? [];
+      },
+    );
+
+    for (const task of tasks) {
+      if (task.is_completed) {
+        continue;
+      }
+
+      pendingCountBySubCategoryId.set(
+        task.sub_category_id,
+        (pendingCountBySubCategoryId.get(task.sub_category_id) ?? 0) + 1,
+      );
+    }
   }
+
+  const subCategories: SubCategory[] = (subs ?? []).map((subCategory) => ({
+    id: subCategory.id,
+    name: subCategory.name,
+    pendingCount: pendingCountBySubCategoryId.get(subCategory.id) ?? 0,
+  }));
 
   return {
     id: category.id,

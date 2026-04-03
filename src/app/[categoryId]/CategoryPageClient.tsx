@@ -15,12 +15,65 @@ type CategoryData = {
   subCategories: SubCategory[];
 };
 
-const fetcher = (url: string) => fetch(url).then((r) => r.json());
+function getErrorMessage(
+  payload: unknown,
+  fallback: string,
+): string {
+  if (
+    payload &&
+    typeof payload === "object" &&
+    "error" in payload &&
+    typeof payload.error === "string" &&
+    payload.error.length > 0
+  ) {
+    return payload.error;
+  }
+  return fallback;
+}
+
+function isCategoryData(payload: unknown): payload is CategoryData {
+  if (!payload || typeof payload !== "object") return false;
+  const candidate = payload as {
+    name?: unknown;
+    subCategories?: unknown;
+  };
+
+  if (
+    typeof candidate.name !== "string" ||
+    !Array.isArray(candidate.subCategories)
+  ) {
+    return false;
+  }
+
+  return candidate.subCategories.every(
+    (item) =>
+      item &&
+      typeof item === "object" &&
+      typeof item.id === "string" &&
+      typeof item.name === "string" &&
+      typeof item.pendingCount === "number",
+  );
+}
+
+async function fetchCategory(url: string): Promise<CategoryData> {
+  const res = await fetch(url);
+  const payload = (await res.json().catch(() => null)) as unknown;
+
+  if (!res.ok) {
+    throw new Error(getErrorMessage(payload, "分类加载失败"));
+  }
+
+  if (!isCategoryData(payload)) {
+    throw new Error("分类数据格式错误");
+  }
+
+  return payload;
+}
 
 export function CategoryPageClient({ categoryId }: { categoryId: string }) {
   const { data, isLoading, error: fetchError, mutate } = useSWR<CategoryData>(
     `/api/categories/${categoryId}`,
-    fetcher,
+    fetchCategory,
     { revalidateOnFocus: false, dedupingInterval: 5000 },
   );
 
@@ -116,7 +169,7 @@ export function CategoryPageClient({ categoryId }: { categoryId: string }) {
           </Link>
         </nav>
         <div className="card py-12 text-center text-sm text-slate-500">
-          分类不存在或加载失败
+          {fetchError instanceof Error ? fetchError.message : "分类加载失败"}
         </div>
       </div>
     );

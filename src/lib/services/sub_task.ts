@@ -1,5 +1,26 @@
 import { supabase } from "@/lib/supabase";
-import { getProgressBySubTaskId, type Progress } from "./progress";
+
+const SUPABASE_BATCH_LIMIT = 1000;
+
+async function batchQuery<T, R>(
+  ids: T[],
+  batchSize: number,
+  queryFn: (batch: T[]) => Promise<R[]>,
+): Promise<R[]> {
+  const results: R[] = [];
+  for (let i = 0; i < ids.length; i += batchSize) {
+    const batch = ids.slice(i, i + batchSize);
+    const batchResults = await queryFn(batch);
+    results.push(...batchResults);
+  }
+  return results;
+}
+
+import {
+  getProgressBySubTaskId,
+  getProgressBySubTaskIds,
+  type Progress,
+} from "./progress";
 
 export type SubTask = {
   id: string;
@@ -14,34 +35,87 @@ export type SubTask = {
   progress: Progress[];
 };
 
-export async function getSubTasksByTaskId(taskId: string): Promise<SubTask[]> {
-  const { data } = await supabase
-    .from("sub_tasks")
-    .select("id, task_id, content, description, assignee, is_completed, is_priority, sort_order, due_date")
-    .eq("task_id", taskId)
-    .order("sort_order")
-    .order("is_completed")
-    .order("is_priority", { ascending: false })
-    .order("created_at");
+type SubTaskRow = {
+  id: string;
+  task_id: string;
+  content: string;
+  description: string | null;
+  assignee: string | null;
+  is_completed: boolean | null;
+  is_priority: boolean | null;
+  sort_order: number | null;
+  due_date: string | null;
+};
 
-  const subTasks = (data ?? []).map((r) => ({
-    id: r.id,
-    taskId: r.task_id,
-    content: r.content,
-    description: r.description ?? "",
-    assignee: r.assignee ?? "",
-    isCompleted: Boolean(r.is_completed),
-    isPriority: Boolean(r.is_priority),
-    sortOrder: r.sort_order ?? 0,
-    dueDate: r.due_date ?? null,
-  }));
+function mapSubTaskRow(row: SubTaskRow): Omit<SubTask, "progress"> {
+  return {
+    id: row.id,
+    taskId: row.task_id,
+    content: row.content,
+    description: row.description ?? "",
+    assignee: row.assignee ?? "",
+    isCompleted: Boolean(row.is_completed),
+    isPriority: Boolean(row.is_priority),
+    sortOrder: row.sort_order ?? 0,
+    dueDate: row.due_date ?? null,
+  };
+}
 
-  const withProgress: SubTask[] = [];
-  for (const st of subTasks) {
-    const progress = await getProgressBySubTaskId(st.id);
-    withProgress.push({ ...st, progress });
+export async function getSubTasksByTaskIds(
+  taskIds: string[],
+): Promise<Map<string, SubTask[]>> {
+  const subTasksByTaskId = new Map<string, SubTask[]>();
+
+  if (taskIds.length === 0) {
+    return subTasksByTaskId;
   }
-  return withProgress;
+
+  for (const taskId of taskIds) {
+    subTasksByTaskId.set(taskId, []);
+  }
+
+  const baseSubTasks = await batchQuery(
+    taskIds,
+    SUPABASE_BATCH_LIMIT,
+    async (batch) => {
+      const { data } = await supabase
+        .from("sub_tasks")
+        .select("id, task_id, content, description, assignee, is_completed, is_priority, sort_order, due_date")
+        .in("task_id", batch)
+        .order("task_id")
+        .order("sort_order")
+        .order("is_completed")
+        .order("is_priority", { ascending: false })
+        .order("created_at");
+      return (data ?? []) as SubTaskRow[];
+    },
+  ).then((rows) => rows.map(mapSubTaskRow));
+
+  const progressBySubTaskId = await getProgressBySubTaskIds(
+    baseSubTasks.map((subTask) => subTask.id),
+  );
+
+  for (const subTask of baseSubTasks) {
+    const fullSubTask: SubTask = {
+      ...subTask,
+      progress: progressBySubTaskId.get(subTask.id) ?? [],
+    };
+    const current = subTasksByTaskId.get(subTask.taskId);
+
+    if (current) {
+      current.push(fullSubTask);
+      continue;
+    }
+
+    subTasksByTaskId.set(subTask.taskId, [fullSubTask]);
+  }
+
+  return subTasksByTaskId;
+}
+
+export async function getSubTasksByTaskId(taskId: string): Promise<SubTask[]> {
+  const subTasksByTaskId = await getSubTasksByTaskIds([taskId]);
+  return subTasksByTaskId.get(taskId) ?? [];
 }
 
 export async function createSubTask(input: {

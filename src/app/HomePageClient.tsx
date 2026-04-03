@@ -11,14 +11,59 @@ type CategoryWithStats = {
   completedCount: number;
 };
 
-const fetcher = (url: string) => fetch(url).then((r) => r.json());
+function getErrorMessage(
+  payload: unknown,
+  fallback: string,
+): string {
+  if (
+    payload &&
+    typeof payload === "object" &&
+    "error" in payload &&
+    typeof payload.error === "string" &&
+    payload.error.length > 0
+  ) {
+    return payload.error;
+  }
+  return fallback;
+}
+
+function isCategoryWithStatsArray(payload: unknown): payload is CategoryWithStats[] {
+  return (
+    Array.isArray(payload) &&
+    payload.every(
+      (item) =>
+        item &&
+        typeof item === "object" &&
+        typeof item.id === "string" &&
+        typeof item.name === "string" &&
+        typeof item.taskCount === "number" &&
+        typeof item.completedCount === "number",
+    )
+  );
+}
+
+async function fetchCategories(url: string): Promise<CategoryWithStats[]> {
+  const res = await fetch(url);
+  const payload = (await res.json().catch(() => null)) as unknown;
+
+  if (!res.ok) {
+    throw new Error(getErrorMessage(payload, "分类加载失败"));
+  }
+
+  if (!isCategoryWithStatsArray(payload)) {
+    throw new Error("分类数据格式错误");
+  }
+
+  return payload;
+}
 
 export function HomePageClient() {
-  const { data: categories = [], isLoading, mutate } = useSWR<CategoryWithStats[]>(
+  const { data, error: fetchError, isLoading, mutate } = useSWR<CategoryWithStats[]>(
     "/api/categories",
-    fetcher,
+    fetchCategories,
     { revalidateOnFocus: false, dedupingInterval: 5000 },
   );
+  const categories = data ?? [];
   const [modalOpen, setModalOpen] = useState(false);
   const [editTarget, setEditTarget] = useState<CategoryWithStats | null>(null);
   const [name, setName] = useState("");
@@ -53,12 +98,12 @@ export function HomePageClient() {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ name: trimmed }),
         });
-      if (!res.ok) {
-        const data = (await res.json().catch(() => null)) as { error?: string };
-        setError(data?.error ?? "更新失败");
-        setSubmitting(false);
-        return;
-      }
+        if (!res.ok) {
+          const data = (await res.json().catch(() => null)) as { error?: string };
+          setError(data?.error ?? "更新失败");
+          setSubmitting(false);
+          return;
+        }
       } else {
         const res = await fetch("/api/categories", {
           method: "POST",
@@ -96,6 +141,22 @@ export function HomePageClient() {
               <div className="h-1.5 rounded-full bg-slate-100 skeleton" />
             </div>
           ))}
+        </div>
+      </div>
+    );
+  }
+
+  if (fetchError) {
+    return (
+      <div className="space-y-6">
+        <div>
+          <h1 className="text-2xl font-semibold text-slate-900">我的分类</h1>
+          <p className="mt-1 text-sm text-slate-500">
+            管理你的每周任务与目标
+          </p>
+        </div>
+        <div className="card py-12 text-center text-sm text-slate-500">
+          {fetchError instanceof Error ? fetchError.message : "分类加载失败"}
         </div>
       </div>
     );
