@@ -47,6 +47,7 @@ CREATE TABLE IF NOT EXISTS tasks (
   content TEXT NOT NULL,
   description TEXT DEFAULT '',
   is_completed BOOLEAN DEFAULT FALSE,
+  completed_at TIMESTAMPTZ,
   week_start DATE NOT NULL,
   source_task_id TEXT REFERENCES tasks(id) ON DELETE SET NULL,
   created_at TIMESTAMPTZ DEFAULT NOW(),

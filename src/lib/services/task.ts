@@ -8,6 +8,7 @@ export type Task = {
   description: string;
   isCompleted: boolean;
   weekStart: string;
+  completedAt: string | null;
   subTasks: SubTask[];
 };
 
@@ -17,6 +18,7 @@ type TaskRow = {
   description: string | null;
   is_completed: boolean | null;
   week_start: string;
+  completed_at: string | null;
 };
 
 export async function getTasksForSubCategory(
@@ -25,7 +27,7 @@ export async function getTasksForSubCategory(
 ): Promise<Task[]> {
   const { data } = await supabase
     .from("tasks")
-    .select("id, content, description, is_completed, week_start")
+    .select("id, content, description, is_completed, week_start, completed_at")
     .eq("sub_category_id", subCategoryId)
     .eq("week_start", weekStart)
     .order("is_completed")
@@ -42,6 +44,7 @@ export async function getTasksForSubCategory(
     description: task.description ?? "",
     isCompleted: Boolean(task.is_completed),
     weekStart: task.week_start,
+    completedAt: task.completed_at ?? null,
     subTasks: subTasksByTaskId.get(task.id) ?? [],
   }));
 }
@@ -72,6 +75,7 @@ export async function createTask(input: {
     description: desc,
     isCompleted: false,
     weekStart: input.weekStart,
+    completedAt: null,
     subTasks: [],
   };
 }
@@ -82,7 +86,7 @@ export async function updateTask(
 ): Promise<Task | null> {
   const { data: existing } = await supabase
     .from("tasks")
-    .select("id, content, description, is_completed, week_start")
+    .select("id, content, description, is_completed, week_start, completed_at")
     .eq("id", id)
     .single();
 
@@ -92,12 +96,20 @@ export async function updateTask(
   const nextDescription = updates.description ?? existing.description ?? "";
   const nextCompleted = updates.isCompleted ?? Boolean(existing.is_completed);
 
+  const wasCompleted = Boolean(existing.is_completed);
+  const completedAt = !wasCompleted && nextCompleted
+    ? new Date().toISOString()
+    : wasCompleted && !nextCompleted
+      ? null
+      : existing.completed_at;
+
   const { error } = await supabase
     .from("tasks")
     .update({
       content: nextContent,
       description: nextDescription,
       is_completed: nextCompleted,
+      completed_at: completedAt,
       updated_at: new Date().toISOString(),
     })
     .eq("id", id);
@@ -111,6 +123,7 @@ export async function updateTask(
     description: nextDescription,
     isCompleted: nextCompleted,
     weekStart: existing.week_start,
+    completedAt,
     subTasks,
   };
 }

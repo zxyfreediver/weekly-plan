@@ -339,6 +339,16 @@ export default function WeeklyTasksPage({ params }: WeeklyTasksPageProps) {
     return `${y}年${m}月${d}日`;
   };
 
+  const formatCompletedTime = (completedAt: string | null) => {
+    if (!completedAt) return "";
+    const d = new Date(completedAt);
+    const month = String(d.getMonth() + 1).padStart(2, "0");
+    const day = String(d.getDate()).padStart(2, "0");
+    const hour = String(d.getHours()).padStart(2, "0");
+    const minute = String(d.getMinutes()).padStart(2, "0");
+    return `${month}月${day}日 ${hour}:${minute}`;
+  };
+
   const weekInfo = useMemo(
     () => getWeekInfoFromStart(selectedWeekStart),
     [selectedWeekStart],
@@ -1569,7 +1579,7 @@ export default function WeeklyTasksPage({ params }: WeeklyTasksPageProps) {
         )}
       </section>
 
-      <div className="card space-y-4 px-4 py-4 sm:px-5 sm:py-5">
+      <div className="card space-y-2 px-2 py-2 sm:px-3 sm:py-3">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
           <div>
             <h2 className="text-base font-semibold text-slate-900">本周任务</h2>
@@ -1613,12 +1623,12 @@ export default function WeeklyTasksPage({ params }: WeeklyTasksPageProps) {
             </div>
           </div>
         ) : (
-          <ul className="space-y-3 text-sm">
+          <ul className="space-y-1.5 text-sm">
             {displayTaskViews.map(
               ({ task, visibleSubTasks, subTaskCountLabel, summaryText }) => (
               <li
                 key={task.id}
-                className={`rounded-[1.7rem] border px-4 py-4 shadow-[0_14px_32px_rgba(148,163,184,0.1)] transition-colors duration-200 ${
+                className={`rounded-2xl border px-3 py-2.5 shadow-[0_14px_32px_rgba(148,163,184,0.1)] transition-colors duration-200 ${
                   task.isCompleted
                     ? "border-slate-200/80 bg-white/70"
                     : "border-white/80 bg-[linear-gradient(180deg,rgba(255,255,255,0.96),rgba(244,250,255,0.92))]"
@@ -1700,8 +1710,8 @@ export default function WeeklyTasksPage({ params }: WeeklyTasksPageProps) {
                   </div>
                 </div>
                 {expandedTaskIds.has(task.id) && (
-                  <div className="mt-4 space-y-3 border-t border-slate-100/90 pt-4">
-                    <ul className="space-y-2">
+                  <div className="mt-2 space-y-1.5 border-t border-slate-100/90 pt-2">
+                    <ul className="space-y-1">
                         {visibleSubTasks.map(
                           ({
                             subTask: st,
@@ -1712,7 +1722,7 @@ export default function WeeklyTasksPage({ params }: WeeklyTasksPageProps) {
                           }) => (
                           <li
                             key={st.id}
-                            className="rounded-3xl border border-emerald-100/70 bg-emerald-50/55 px-3 py-3 shadow-[0_10px_24px_rgba(167,243,208,0.12)]"
+                            className="rounded-xl border border-emerald-100/70 bg-emerald-50/55 px-2.5 py-2 shadow-[0_10px_24px_rgba(167,243,208,0.12)]"
                           >
                             <div className="flex items-start gap-2">
                               <button
@@ -1827,12 +1837,12 @@ export default function WeeklyTasksPage({ params }: WeeklyTasksPageProps) {
                               </div>
                             </div>
                             {expandedSubTaskIds.has(st.id) && (
-                              <div className="mt-3 space-y-3 rounded-[1.4rem] border border-white/75 bg-white/76 px-3 py-3">
-                                <ul className="space-y-1.5">
+                              <div className="mt-2 space-y-1.5 rounded-xl border border-white/75 bg-white/76 px-2.5 py-2">
+                                <ul className="space-y-1">
                                   {visibleProgress.map((p) => (
                                     <li
                                       key={p.id}
-                                      className="flex items-start gap-2 rounded-2xl bg-white/86 px-2.5 py-2 text-xs shadow-sm"
+                                      className="flex items-start gap-2 rounded-xl bg-white/86 px-2 py-1.5 text-xs shadow-sm"
                                     >
                                       <button
                                         type="button"
@@ -2518,8 +2528,8 @@ export default function WeeklyTasksPage({ params }: WeeklyTasksPageProps) {
       </div>
 
       {completedSummary.length > 0 && !hideCompleted && (
-        <div className="card overflow-hidden px-4 py-4 sm:px-5 sm:py-5">
-          <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="card overflow-hidden px-3 py-3 sm:px-4 sm:py-4">
+          <div className="mb-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
             <div className="flex items-center gap-2">
               <h3 className="text-base font-semibold text-slate-800">
                 ✓ 本周已完成
@@ -2537,20 +2547,25 @@ export default function WeeklyTasksPage({ params }: WeeklyTasksPageProps) {
               {weekInfo.label}
             </span>
           </div>
-          <ul className="space-y-2 text-sm">
+          <ul className="space-y-1.5 text-sm">
             {completedSummary.map(({ task, hasTaskCompleted, subTaskGroups, isRecentlyCompleted }) => (
               <li
                 key={task.id}
-                className={`rounded-3xl border px-4 py-3 ${isRecentlyCompleted ? "border-yellow-200 bg-yellow-50/90" : "border-slate-100/90 bg-white/72"}`}
+                className={`rounded-2xl border px-3 py-2 ${isRecentlyCompleted ? "border-amber-300 bg-amber-50/95 shadow-[0_4px_12px_rgba(251,191,36,0.15)]" : "border-slate-100/90 bg-white/72"}`}
               >
                 <div className="flex items-center justify-between gap-2">
                   <div className="flex min-w-0 flex-1 items-center gap-2">
                     {hasTaskCompleted && (
                       <>
-                        <span className="shrink-0 text-slate-500">✓</span>
-                        <span className="font-medium text-slate-800">
+                        <span className="shrink-0 text-amber-500">✓</span>
+                        <span className="font-semibold text-slate-800">
                           {task.content}
                         </span>
+                        {task.completedAt && (
+                          <span className="shrink-0 rounded-full bg-amber-100 px-2 py-0.5 text-[10px] text-amber-700">
+                            {formatCompletedTime(task.completedAt)}
+                          </span>
+                        )}
                       </>
                     )}
                     {!hasTaskCompleted && subTaskGroups.length > 0 && (
@@ -2571,7 +2586,7 @@ export default function WeeklyTasksPage({ params }: WeeklyTasksPageProps) {
                 {subTaskGroups.map(({ subTask, progress }) => (
                   <div
                     key={subTask.id}
-                    className="mt-3 rounded-2xl border border-slate-100/90 bg-white/78 px-4 py-3"
+                    className="mt-2 rounded-xl border border-slate-100/90 bg-white/78 px-3 py-2"
                   >
                     {subTask.isCompleted && (
                       <div className="flex items-center gap-2 py-0.5 text-slate-600">
@@ -2584,11 +2599,11 @@ export default function WeeklyTasksPage({ params }: WeeklyTasksPageProps) {
                         {subTask.content}
                       </div>
                     )}
-                    <ul className="mt-0.5 space-y-0.5">
+                    <ul className="mt-0.5 space-y-0">
                       {progress.map((p) => (
                         <li
                           key={p.id}
-                          className="flex items-center gap-2 rounded-xl bg-slate-50/80 px-3 py-2 text-slate-600"
+                          className="flex items-center gap-2 rounded-lg bg-slate-50/80 px-2.5 py-1.5 text-slate-600"
                         >
                           <span className="shrink-0 text-slate-500">✓</span>
                           <span>{p.content}</span>
