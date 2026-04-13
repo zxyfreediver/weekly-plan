@@ -283,8 +283,13 @@ function buildTaskView(task: Task, hideCompleted: boolean, sortSubItems: boolean
 
 export default function WeeklyTasksPage({ params }: WeeklyTasksPageProps) {
   const { categoryId, subCategoryId } = use(params);
-  const [selectedWeekStart, setSelectedWeekStart] = useState(getInitialWeekStart);
+  const [selectedWeekStart, setSelectedWeekStart] = useState<string | null>(null);
   const [isWeekReady, setIsWeekReady] = useState(false);
+
+  useEffect(() => {
+    setSelectedWeekStart(getInitialWeekStart());
+    setIsWeekReady(true);
+  }, [subCategoryId]);
   const [weekPickerOpen, setWeekPickerOpen] = useState(false);
   const [tasks, setTasks] = useState<Task[]>([]);
   const [loading, setLoading] = useState(true);
@@ -350,11 +355,11 @@ export default function WeeklyTasksPage({ params }: WeeklyTasksPageProps) {
   };
 
   const weekInfo = useMemo(
-    () => getWeekInfoFromStart(selectedWeekStart),
+    () => getWeekInfoFromStart(selectedWeekStart ?? getInitialWeekStart()),
     [selectedWeekStart],
   );
   const selectedYear = useMemo(
-    () => new Date(selectedWeekStart + "T00:00:00").getFullYear(),
+    () => new Date((selectedWeekStart ?? getInitialWeekStart()) + "T00:00:00").getFullYear(),
     [selectedWeekStart],
   );
   const weeksInYear = useMemo(() => getWeeksInYear(selectedYear), [selectedYear]);
@@ -383,22 +388,7 @@ export default function WeeklyTasksPage({ params }: WeeklyTasksPageProps) {
   };
 
   useEffect(() => {
-    const storageKey = `${WEEK_STORAGE_KEY_PREFIX}${subCategoryId}`;
-    const currentWeekStart = getInitialWeekStart();
-    const savedWeekStart =
-      typeof window !== "undefined"
-        ? window.localStorage.getItem(storageKey)
-        : null;
-
-    if (savedWeekStart && WEEK_START_PATTERN.test(savedWeekStart)) {
-      setSelectedWeekStart(savedWeekStart);
-    } else {
-      setSelectedWeekStart(currentWeekStart);
-      if (typeof window !== "undefined") {
-        window.localStorage.setItem(storageKey, currentWeekStart);
-      }
-    }
-
+    setSelectedWeekStart(getInitialWeekStart());
     setIsWeekReady(true);
   }, [subCategoryId]);
 
