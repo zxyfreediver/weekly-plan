@@ -1,0 +1,7 @@
+# Enforce LF line endings for Unix-executed scripts and text files
+*.py text eol=lf
+*.sh text eol=lf
+*.bash text eol=lf
+
+# Treat all other text files as LF in repo but allow checkout to system default
+* text=auto
