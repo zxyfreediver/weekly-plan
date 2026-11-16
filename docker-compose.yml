@@ -1,0 +1,25 @@
+services:
+  weekly-plan:
+    image: weekly-plan:local
+    # NAS 上已通过 `docker load -i weekly-plan-local.tar` 导入镜像，直接使用即可。
+    # 若在 NAS 上从源码重新构建，可取消下面两行注释：
+    # build:
+    #   context: .
+    container_name: weekly-plan
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      # 使用本地文件数据库（数据存放在 /app/data/db.json）
+      LOCAL_DB: "true"
+      # 登录账号，请按需修改
+      AUTH_USERNAME: "zhaoxingyu"
+      AUTH_PASSWORD: "change-me-please"
+      # AI 总结（可选），不填则 AI 总结不可用
+      # DEEPSEEK_API_KEY: "sk-xxxx"
+    volumes:
+      # 数据持久化：db.json 保存在该卷中，NAS 备份时备份这个卷即可
+      - weekly-plan-data:/app/data
+
+volumes:
+  weekly-plan-data:
